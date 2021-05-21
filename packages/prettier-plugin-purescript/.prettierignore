@@ -1,0 +1,4 @@
+package-lock.json
+.spago
+output/
+index.js

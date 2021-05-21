@@ -1,0 +1,35 @@
+{
+  "name": "@rowtype-yoga/prettier-plugin-purescript",
+  "version": "1.11.1",
+  "description": "A prettier plugin that formats PureScript code using pose",
+  "main": "index.js",
+  "files": [
+    "index.js"
+  ],
+  "directory": "packages/prettier-plugin-purescript",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "spago build && spago bundle-module --main Pose.PrettierPlugin --to index.js",
+    "format": "prettier --write .",
+    "prerelease": "npm run build",
+    "release": "npm publish --access public",
+    "test": "spago test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rowtype-yoga/pose.git"
+  },
+  "author": "Mark Eibes",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/rowtype-yoga/pose/issues"
+  },
+  "homepage": "https://rowtype.yoga/pose",
+  "devDependencies": {
+    "prettier": "^2.3.2",
+    "purescript": "^0.14.3",
+    "spago": "^0.20.3"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "bin": "./bin/pose.js",
+  "bugs": {
+    "url": "https://github.com/rowtype-yoga/pose/issues"
+  },
+  "description": "A PureScript formatter written in PureScript",
+  "files": [
+    "bin/pose.js"
+  ],
+  "dependencies": {
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "@rowtype-yoga/prettier-plugin-purescript": "^1.11.1",
+    "diff2html": "^3.4.4",
+    "json-stable-stringify": "^1.0.1",
+    "prettier": "^2.3.2",
+    "purescript": "^0.14.3",
+    "spago": "^0.20.3",
+    "unidiff": "^1.0.2"
+  },
+  "directory": "packages/core",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rowtype-yoga/pose.git"
+  },
+  "license": "BSD-3-Clause",
+  "scripts": {
+    "build": "spago -x exe.dhall bundle-app --main Pose.Main --to ./bin/pose.js",
+    "format": "prettier --write .",
+    "test": "spago -x exe.dhall test"
+  },
+  "version": "0.1.0",
+  "prettier": {}
+}

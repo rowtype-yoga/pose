@@ -1,0 +1,63 @@
+/**
+ * @license
+ *
+ * Font Family: Sentient
+ * Designed by: Noopur Choksi
+ * URL: https://www.fontshare.com/fonts/sentient
+ * © 2021 Indian Type Foundry
+ *
+ * Font Styles:
+ * Sentient Variable(Variable font)
+ * Sentient Variable Italic(Variable font)
+ *
+*/
+
+
+/**
+* This is a variable font
+* You can controll variable axes as shown below:
+* font-variation-settings: 'wght' 700.0 'wght' 400.0;
+*
+* available axes:
+
+* 'wght' (range from 200.0 to 700.0)
+
+* 'wght' (range from 200.0 to 700.0)
+
+*/
+
+@font-face {
+  font-family: 'SentientVariable';
+  src: url('./Sentient-Variable.woff2') format('woff2'),
+       url('./Sentient-Variable.woff') format('woff'),
+       url('./Sentient-Variable.ttf') format('truetype');
+       font-weight: 200 700;
+       font-display: swap;
+       font-style: normal;
+}
+
+
+/**
+* This is a variable font
+* You can controll variable axes as shown below:
+* font-variation-settings: 'wght' 700.0 'wght' 400.0;
+*
+* available axes:
+
+* 'wght' (range from 200.0 to 700.0)
+
+* 'wght' (range from 200.0 to 700.0)
+
+*/
+
+@font-face {
+  font-family: 'SentientVariableItalic';
+  src: url('./Sentient-VariableItalic.woff2') format('woff2'),
+       url('./Sentient-VariableItalic.woff') format('woff'),
+       url('./Sentient-VariableItalic.ttf') format('truetype');
+       font-weight: 200 700;
+       font-display: swap;
+       font-style: italic;
+}
+
+

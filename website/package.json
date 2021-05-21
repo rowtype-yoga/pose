@@ -1,0 +1,62 @@
+{
+  "name": "pose-website",
+  "version": "0.2.0",
+  "description": "Website for the pose PureScript formatter",
+  "keywords": [
+    "PureScript",
+    "Code",
+    "Formatter",
+    "Pose"
+  ],
+  "author": "Mark Eibes",
+  "license": "MIT",
+  "scripts": {
+    "analyze": "cross-env ANALYZE=true spago build",
+    "build": "yarn build:clean && yarn build:spago && yarn build:dce && yarn build:next",
+    "build:clean": "rm -Rf corefn output",
+    "build:spago": "spago build --purs-args '--output corefn --codegen corefn'",
+    "build:dce": "bash scripts/zephyr.sh",
+    "build:next": "next build",
+    "clean": "rm -Rf .cache .next output corefn node_modules .spago *.lock",
+    "dev": "next",
+    "start": "yarn build && next start -p 3001",
+    "test": "spago test",
+    "prestorybook": "spago build",
+    "storybook": "start-storybook -p 6006 -s .",
+    "build-storybook": "build-storybook -s ."
+  },
+  "devDependencies": {
+    "@netlify/plugin-nextjs": "^3.4.2",
+    "@rowtype-yoga/prettier-plugin-purescript": "^1.11.1",
+    "@storybook/react": "^6.3.4",
+    "@zeit/next-css": "^1.0.1",
+    "monaco-editor-webpack-plugin": "^4.0.0",
+    "next-transpile-modules": "^8.0.0",
+    "prettier": "^2.3.2",
+    "purescript": "^0.14.3",
+    "spago": "^0.20.3",
+    "zephyr": "https://github.com/jonasbuntinx/zephyr.git"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.4.0",
+    "@fontsource/bellota": "^4.5.0",
+    "@fontsource/bellota-text": "^4.5.0",
+    "@fontsource/crimson-pro": "^4.5.0",
+    "@fontsource/inter": "^4.5.0",
+    "@fontsource/jetbrains-mono": "^4.5.0",
+    "@fontsource/oregano": "^4.5.0",
+    "@next/bundle-analyzer": "^11.0.1",
+    "@react-aria/button": "^3.3.2",
+    "@react-aria/focus": "^3.4.0",
+    "autoprefixer": "^10.2.6",
+    "cross-env": "^7.0.3",
+    "framer-motion": "^4.1.17",
+    "monaco-editor": "^0.25.2",
+    "next": "^11.0.1",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-monaco-editor": "^0.43.0",
+    "string-replace-loader": "^3.0.2",
+    "xhr2": "^0.2.1"
+  }
+}
