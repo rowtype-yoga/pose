@@ -19,16 +19,16 @@ import Test.Spec.Runner (runSpec)
 
 main :: Effect Unit
 main =  launchAff_ do
-  fileNames <- A.take 1 <$> readdir original
+  fileNames <- A.take 2 <$> readdir original
   -- fileNames <- readdir original
   runSpec [consoleReporter] (testGolden fileNames)
 
 testGolden :: Array FilePath -> Spec Unit
 testGolden fileNames = do
   describe "Golden Tests" do
-    describeOnly "prints as is" do
+    describe "prints as is" do
       for_ fileNames $ testOne original
-    describe "formats nicely" do
+    describeOnly "formats nicely" do
       for_  fileNames $ testOne golden
   
 testOne :: FilePath -> FilePath -> Spec Unit
