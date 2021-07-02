@@ -39,6 +39,7 @@ to generate this file without the comments in this block.
   , "spec-discovery"
   , "transformers"
   , "tuples"
+  , "unsafe-coerce"
   , "uuid"
   ]
 , packages = ./packages.dhall

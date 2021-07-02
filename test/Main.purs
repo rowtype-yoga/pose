@@ -15,13 +15,14 @@ import Test.Spec (Spec, describe, describeOnly, it)
 import Test.Spec.Assertions.Diff (Actual(..), GoldenFile(..), shouldBeGolden)
 import Test.Spec.File (fileAsString)
 import Test.Spec.Reporter (consoleReporter)
+import Test.Spec.Reporter.Spec (specReporter)
 import Test.Spec.Runner (runSpec)
 
 main :: Effect Unit
 main =  launchAff_ do
-  fileNames <- A.take 2 <$> readdir original
-  -- fileNames <- readdir original
-  runSpec [consoleReporter] (testGolden fileNames)
+  -- fileNames <- A.take 2 <$> readdir original
+  fileNames <- readdir original
+  runSpec [specReporter] (testGolden fileNames)
 
 testGolden :: Array FilePath -> Spec Unit
 testGolden fileNames = do
