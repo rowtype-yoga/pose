@@ -123,5 +123,5 @@ with language-cst-parser =
       , "typelevel-prelude"
       ]
     , repo = "https://github.com/i-am-the-slime/purescript-language-cst-parser.git"
-    , version = "58dd948"
+    , version = "range-fix"
     }

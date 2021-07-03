@@ -97,11 +97,11 @@ formatExport indentation indent' export' = case export' of
   CST.ExportType name' dataMembers' -> do
     let 
       indentTrick = indent' <> indentation
-      (indent /\ prefix) = case lines of
+      indent /\ prefix = case lines of
           MultipleLines ->
            indentTrick /\ (newline <> indentTrick)
           SingleLine ->
-            (indent' /\ blank)
+            indent' /\ blank
     formatName indent' blank name'
       <> prefix
       <> foldMap (formatDataMembers indentation indent) dataMembers'
@@ -274,6 +274,7 @@ formatDeclarations indentation = foldMap formatOne
     
 formatDeclaration :: Indentation -> Indent -> CST.Declaration Void -> String
 formatDeclaration indentation indent declaration = case declaration of
+
   CST.DeclData dataHead maybeConstructors -> do
     formatDataHead indentation indent dataHead
       <> foldMap formatDataConstructors maybeConstructors
@@ -288,6 +289,7 @@ formatDeclaration indentation indent declaration = case declaration of
               blank
               (formatDataConstructor indentation indented)
               constructors      
+
   CST.DeclType dataHead equals typo ->
     formatDataHead indentation indent dataHead
       <> newline
@@ -296,6 +298,7 @@ formatDeclaration indentation indent declaration = case declaration of
       <> space
       <> formatType indentation (indented <> indentation) (singleOrMultiline typo) typo
       <> newline
+
   CST.DeclNewtype dataHead equals name typo -> do
     formatDataHead indentation indent dataHead
       <> (newline <> indented)
@@ -309,6 +312,7 @@ formatDeclaration indentation indent declaration = case declaration of
       prefix = case singleOrMultilineBetween name typo of
         MultipleLines -> newline <> indented 
         SingleLine -> space
+
   CST.DeclClass classHead members -> do
     formatClassHead lines indentation indent classHead
       <> foldMap formatMember members
@@ -316,9 +320,10 @@ formatDeclaration indentation indent declaration = case declaration of
     where 
       formatMember (whereClause /\ labeleds) =
         formatSourceToken indent space whereClause
-          <> intercalateMap newline formatLabeledMember labeleds
+          <> intercalateMap (newline <> indented) formatLabeledMember labeleds
       formatLabeledMember labeled = 
         newline <> indented <> formatLabeledNameType indentation indented labeled
+
   CST.DeclInstanceChain instances ->
     formatSeparated
       (singleOrMultiline instances)
@@ -327,29 +332,36 @@ formatDeclaration indentation indent declaration = case declaration of
       (formatInstance indentation indent)
       instances
       <> newline
+
   CST.DeclDerive sourceToken newtype' instanceHead ->
     formatSourceToken indent blank sourceToken
       <> foldMap (formatSourceToken indent space) newtype'
       <> space
       <> formatInstanceHead indentation indent instanceHead
       <> newline
+
   CST.DeclKindSignature kindOfDeclaration labeled ->
     formatSourceToken indentation indent kindOfDeclaration
       <> space
       <> formatLabeledNameType indentation indent labeled
-  CST.DeclSignature labeled ->
+
+  CST.DeclSignature labeled -> 
     formatLabeledNameType indentation indent labeled
+
   CST.DeclValue valueBindingFields ->
     formatValueBindingFields indentation indent valueBindingFields 
       <> newline
+
   CST.DeclFixity fixityFields ->
     formatFixityFields indent fixityFields <> newline
+
   CST.DeclForeign foreign'' import'' foreign''' ->
     formatSourceToken indent blank foreign''
       <> formatSourceToken indent space import''
       <> space
       <> formatForeign lines indentation indent foreign'''
       <> newline
+
   CST.DeclRole type'' role'' name' roles -> do
     formatSourceToken indentation indent type''
       <> space
@@ -362,6 +374,7 @@ formatDeclaration indentation indent declaration = case declaration of
         )
         roles
       <> newline
+
   CST.DeclError e -> absurd e
   where 
     indented = indent <> indentation
@@ -788,7 +801,7 @@ formatExpr ::
 formatExpr indentation indent'' expr'' = case expr'' of
   CST.ExprAdo adoBlock' ->
     formatAdoBlock lines indentation indent'' adoBlock'
-  CST.ExprApp expr1 expressions -> do -- [CHECK] Verify
+  CST.ExprApp expr1 expressions -> -- [CHECK] Verify
     formatExpr indentation indent'' expr1
       <> foldMap (formatExprPrefix lines indentation indent'') expressions
   CST.ExprArray delimited' -> do
@@ -847,12 +860,11 @@ formatExpr indentation indent'' expr'' = case expr'' of
     formatSourceToken indent'' blank number
   CST.ExprOp expr1 expressions -> do
     let 
-      indentTrick = indent'' <> indentation
       indent /\ indent' /\ prefix = case lines of
           MultipleLines ->
-            (indentTrick) /\ indentTrick /\ (newline <> indentTrick)
+            (indent'' <> indentation <> indentation) /\ (indent'' <> indentation) /\ (newline <> indent'' <> indentation)
           SingleLine ->
-            indentTrick /\ indent'' /\ space
+            (indent'' <> indentation) /\ indent'' /\ space
     formatExpr indentation indent'' expr1
       <> foldMap (\(op /\ expr) -> 
            formatQualifiedName indent' prefix op
@@ -1466,7 +1478,7 @@ formatType indentation indent lines t = case t of
         MultipleLines -> { indented: indent <> indentation, prefix: newline <> indent } 
         SingleLine -> { indented: indent, prefix: space }
 
-      formatTypes = foldMap (\t -> prefix <> formatType indentation indented lines t)
+      formatTypes = foldMap (\typo -> prefix <> formatType indentation indented lines typo)
   CST.TypeOp typo types ->
     formatType indentation indent lines typo
       <> foldMap formatOp types -- [TODO] Verify
@@ -1535,7 +1547,7 @@ formatLabeled indentation indent' formatLabel formatValue
   { indent, prefix } = case singleOrMultiline labeled of
     MultipleLines -> do
       { indent: indent' <> indentation
-      , prefix: newline <> indent' <> indentation <> indentation
+      , prefix: newline <> indent' <> indentation
       }
     SingleLine -> { indent: indent', prefix: space}
 
