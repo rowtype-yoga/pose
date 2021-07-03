@@ -850,7 +850,7 @@ formatExpr indentation indent'' expr'' = case expr'' of
       indentTrick = indent'' <> indentation
       indent /\ indent' /\ prefix = case lines of
           MultipleLines ->
-            (indentTrick <> indentation) /\ indentTrick /\ (newline <> indentTrick)
+            (indentTrick) /\ indentTrick /\ (newline <> indentTrick)
           SingleLine ->
             indentTrick /\ indent'' /\ space
     formatExpr indentation indent'' expr1
