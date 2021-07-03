@@ -1543,7 +1543,9 @@ formatLabeled indentation indent' formatLabel formatValue
   where 
   { indent, prefix } = case singleOrMultiline labeled of
     MultipleLines -> do
-      { indent: indent' <> indentation, prefix: newline <> indent' <> indentation }
+      { indent: indent' <> indentation
+      , prefix: newline <> indent' <> indentation <> indentation
+      }
     SingleLine -> { indent: indent', prefix: space}
 
 formatLabeledName
