@@ -6,8 +6,7 @@ import Data.Array (head)
 import Data.Array as Array
 import Data.Array.NonEmpty as NE
 import Data.Foldable (fold, foldMap)
-import Data.Maybe (Maybe(..), isJust)
-import Data.Newtype (un)
+import Data.Maybe (Maybe(..))
 import Data.Semigroup.Foldable (intercalateMap)
 import Data.Tuple.Nested (type (/\), (/\))
 import PureScript.CST.Print as Print
@@ -251,10 +250,10 @@ formatDelimited ::
   (a -> String) ->
   CST.Delimited a ->
   String
-formatDelimited indent g delimited = do
+formatDelimited indent formatValue delimited = do
   formatWrapped
     indent
-    (foldMap (formatSeparated lines indent space g))
+    (foldMap (formatSeparated lines indent space formatValue))
     delimited
   where
   lines = singleOrMultiline delimited
@@ -295,7 +294,7 @@ formatDeclaration indentation indent declaration = case declaration of
       <> indented
       <> formatSourceToken indented blank equals
       <> space
-      <> formatType indentation (indented <> indentation) typo
+      <> formatType indentation (indented <> indentation) (singleOrMultiline typo) typo
       <> newline
   CST.DeclNewtype dataHead equals name typo -> do
     formatDataHead indentation indent dataHead
@@ -304,7 +303,7 @@ formatDeclaration indentation indent declaration = case declaration of
       <> space
       <> formatName indented blank name
       <> prefix
-      <> formatType indentation indented typo
+      <> formatType indentation indented lines typo
       <> newline
     where 
       prefix = case singleOrMultilineBetween name typo of
@@ -385,15 +384,15 @@ formatForeign ::
   CST.Foreign Void ->
   String
 formatForeign span indentation indent' foreign'' = case foreign'' of
+  CST.ForeignData data' labeled' -> do
+    formatSourceToken indent' blank data'
+      <> space
+      <> formatLabeledNameKind indentation indent' labeled'
   CST.ForeignKind kind name' -> do
     formatSourceToken indent' blank kind
       <> formatName indent' space name'
   CST.ForeignValue labeled' -> do
     formatLabeledNameType indentation indent' labeled'
-  CST.ForeignData data' labeled' -> do
-    formatSourceToken indent' blank data'
-      <> space
-      <> formatLabeledNameKind indentation indent' labeled'
 
 formatLabeledNameKind ::
   forall a.
@@ -403,12 +402,13 @@ formatLabeledNameKind ::
     (CST.Name a)
     (CST.Type Void) ->
   String
-formatLabeledNameKind indentation indent =
+formatLabeledNameKind indentation indent labeled =
   formatLabeled
     indentation
     indent
     (formatName indent blank)
-    (formatType indentation)
+    (\x -> formatType indentation x (singleOrMultiline labeled))
+    labeled
 
 formatFixityFields ::
   Indent ->
@@ -488,14 +488,14 @@ formatInstanceHead indentation indent''
               <> formatOneOrDelimited
                 lines
                 indent'
-                (formatType indentation indent)
+                (formatType indentation indent lines)
                 constraints
               <> formatSourceToken indent' space arrow
         )
         constraints'
       <> formatQualifiedName indent' prefix className
       <> foldMap
-        ( \type'' -> typePrefix <> formatType indentation indent type'')
+        ( \type'' -> typePrefix <> formatType indentation indent lines type'')
         types
 
 formatInstanceBinding ::
@@ -586,7 +586,6 @@ formatBinder indentation indent' binder = case binder of
     formatRecord
       indent'
       ( formatRecordLabeled
-          lines
           indentation
           indent'
           (formatBinder indentation)
@@ -605,7 +604,7 @@ formatBinder indentation indent' binder = case binder of
     formatBinder indentation indent' binder'
       <> formatSourceToken indent' space colons
       <> prefix
-      <> formatType  indentation indent type''
+      <> formatType indentation indent lines type''
   CST.BinderVar name' ->
     formatName indent' blank name'
   CST.BinderWildcard wildcard ->
@@ -719,7 +718,7 @@ formatPatternGuard lines indentation indent' patternGuard@(CST.PatternGuard { bi
 
 formatExprPrefix :: Lines -> Indentation -> Indent -> CST.Expr Void -> String
 formatExprPrefix lines indentation indent' expr =
-  prefix <> formatExpr indentation indent' expr 
+  prefix <> formatExpr indentation indent expr 
   where
   indent = case expr of
       CST.ExprAdo _ -> indent'
@@ -870,48 +869,45 @@ formatExpr indentation indent'' expr'' = case expr'' of
     formatQualifiedName indent'' blank name'
   CST.ExprParens wrapped' -> do
     formatParens lines indentation indent'' (formatExpr indentation) wrapped'
-  CST.ExprRecord delimited' -> do
+  CST.ExprRecord delimited -> do
     formatRecord
       indent''
       (formatRecordLabeled
-          lines
           indentation
           indent''
           (formatExpr indentation)
       )
-      delimited'
+      delimited
   CST.ExprRecordAccessor recordAccessor' -> do
     formatRecordAccessor lines indentation indent'' recordAccessor'
-  CST.ExprRecordUpdate expr' delimitedNonEmpty' -> do
+  CST.ExprRecordUpdate expr' delimitedNonEmpty -> do
     let 
-      indentTrick = indent'' <> indentation
       indent' /\ prefix = case lines of
           MultipleLines ->
-            indentTrick /\ (newline <> indentTrick)
+            (indent'' <> indentation) /\ (newline <> indent'' <> indentation)
           SingleLine ->
             indent'' /\ space
     formatExpr indentation indent'' expr'
       <> prefix
       <> formatRecordNonEmpty
         indent'
-        (formatRecordUpdate lines indentation indent')
-        delimitedNonEmpty'
+        (formatRecordUpdate indentation indent')
+        delimitedNonEmpty
   CST.ExprSection section -> 
     formatSourceToken indent'' blank section
   CST.ExprString string _ -> 
     formatSourceToken indent'' blank string
   CST.ExprTyped expr' colons type'' -> do
     let 
-      indentTrick = indent'' <> indentation
       indent' /\ prefix = case lines of
           MultipleLines ->
-            indentTrick /\ (newline <> indentTrick)
+            (indent'' <> indentation) /\ (newline <> indent'' <> indentation)
           SingleLine ->
             indent'' /\ space
     formatExpr indentation indent'' expr'
       <> formatSourceToken indent'' space colons
       <> prefix
-      <> formatType indentation indent' type''
+      <> formatType indentation indent' lines type''
   CST.ExprInt int _ -> formatSourceToken indent'' blank int
   CST.ExprError e -> absurd e
   where
@@ -923,15 +919,39 @@ formatRecord ::
   (a -> String) ->
   CST.Delimited a ->
   String
-formatRecord indent f record'' = case record'' of
+formatRecord indent formatValue record'' = case record'' of
   CST.Wrapped { open, value: Nothing, close } -> do
     formatSourceToken indent blank open
       <> formatSourceToken indent blank close
   CST.Wrapped { open, value: Just record',  close } ->
     formatRecordNonEmpty
       indent
-      f
+      formatValue
       (CST.Wrapped { open, value: record', close })
+
+formatRecordNonEmpty ::
+  forall a.
+  Indent ->
+  (a -> String) ->
+  CST.DelimitedNonEmpty a ->
+  String
+formatRecordNonEmpty indent formatValue record' = do
+  let 
+    (before /\ after) = case lines of 
+      MultipleLines ->
+        (blank /\ blank)
+      SingleLine ->
+        (space /\ space)
+  formatWrapped
+    indent
+    ( \separated' ->
+        before
+          <> formatSeparated lines indent space formatValue separated' -- [CHECK] is the lines correct
+          <> after
+    )
+    record'
+  where
+    lines = singleOrMultiline record'
 
 formatRecordAccessor ::
   Lines ->
@@ -960,14 +980,14 @@ formatRecordAccessor lines indentation indent' recordAccessor' = case recordAcce
 
 -- [CHECK] Verify lines stuff
 formatRecordUpdate ::
-  Lines -> 
   Indentation ->
   Indent ->
   CST.RecordUpdate Void ->
   String
-formatRecordUpdate lines indentation indent' recordUpdate' = case recordUpdate' of
+formatRecordUpdate indentation indent' recordUpdate' = case recordUpdate' of
   CST.RecordUpdateBranch label' delimitedNonEmpty' -> do
     let 
+      lines = singleOrMultiline delimitedNonEmpty'
       indentTrick = indent' <> indentation
       indent /\ prefix = case lines of
           MultipleLines ->
@@ -978,10 +998,11 @@ formatRecordUpdate lines indentation indent' recordUpdate' = case recordUpdate' 
       <> prefix
       <> formatRecordNonEmpty
         indent
-        (formatRecordUpdate lines indentation indent)
+        (formatRecordUpdate indentation indent)
         delimitedNonEmpty'
   CST.RecordUpdateLeaf label' equals expr' -> do
     let 
+      lines = singleOrMultiline expr'
       indentTrick =indent' <> indentation
       indent /\ prefix = case lines of
           MultipleLines ->
@@ -994,54 +1015,28 @@ formatRecordUpdate lines indentation indent' recordUpdate' = case recordUpdate' 
       <> prefix
       <> formatExpr indentation indent expr'
 
--- [TODO] No idea what's happening here with RangeOf
 formatRecordLabeled ::
   forall a.
   RangeOf a =>
-  Lines ->
   Indentation ->
   Indent ->
   (Indent -> a -> String) ->
   CST.RecordLabeled a ->
   String
-formatRecordLabeled lines indentation indent' f recordLabeled' = case recordLabeled' of
+formatRecordLabeled indentation indent' f recordLabeled' = case recordLabeled' of
   CST.RecordPun name' -> do
     formatName indent' blank name'
   CST.RecordField label' colon a -> do
-    let indentTrick = indent' <> indentation <> indentation
-        indent /\ prefix = case lines of
+    let
+        indent /\ prefix = case singleOrMultilineBetween label' a of
           MultipleLines ->
-            indentTrick /\ (newline <> indentTrick)
+            (indent' <> indentation <> indentation) /\ (newline <> indent' <> indentation <> indentation)
           SingleLine ->
             indent' /\ space
     formatName indent' blank label'
       <> formatSourceToken indent' blank colon
       <> prefix
       <> f indent a
-
-formatRecordNonEmpty ::
-  forall a.
-  Indent ->
-  (a -> String) ->
-  CST.DelimitedNonEmpty a ->
-  String
-formatRecordNonEmpty indent formatValue record' = do
-  let 
-    (before /\ after) = case lines of 
-      MultipleLines ->
-        (blank /\ blank)
-      SingleLine ->
-        (space /\ space)
-  formatWrapped
-    indent
-    ( \separated' ->
-        before
-          <> formatSeparated lines indent space formatValue separated' -- [CHECK] is the lines correct
-          <> after
-    )
-    record'
-  where
-    lines = singleOrMultiline record'
 
 formatLetIn ::
   Lines ->
@@ -1295,12 +1290,13 @@ formatLabeledNameType ::
   Indent ->
   CST.Labeled (CST.Name a) (CST.Type Void) ->
   String
-formatLabeledNameType indentation indent =
+formatLabeledNameType indentation indent labeled =
   formatLabeled
     indentation
     indent
     (formatName indent blank)
-    (formatType indentation)
+    (\x -> formatType indentation x (singleOrMultiline labeled))
+    labeled
 
 formatClassHead
   :: Lines
@@ -1339,7 +1335,7 @@ formatClassHead lines indentation indent { keyword, super, name, vars, fundeps }
         <> formatOneOrDelimited 
              lines
              indented
-             (formatType indentation indent)
+             (formatType indentation indent lines)
              constraints
         <> formatSourceToken indent space arrow
 
@@ -1390,13 +1386,14 @@ formatDataConstructor indentation indent constructor@(CST.DataCtor { name, field
     <> formatName indent blank name
     <> foldMap formatField fields
   where 
-    { indented, prefix } = case singleOrMultiline constructor of
+    lines = singleOrMultiline constructor
+    { indented, prefix } = case lines of
         MultipleLines -> do
           let indented = indent <> indentation
           { indented, prefix: newline <> indented } 
         SingleLine -> { indented: indent, prefix: space }
 
-    formatField typo = prefix <> formatType indentation indented typo
+    formatField typo = prefix <> formatType indentation indented lines typo
 
 -- | Formats the `data Maybe a` part of `data Maybe a = Just a | Nothing`
 formatDataHead :: Indentation -> Indent -> CST.DataHead Void -> String
@@ -1428,9 +1425,10 @@ formatTypeVarBinding indentation indent = case _ of
 formatType
   :: Indentation
   -> Indent
+  -> Lines
   -> CST.Type Void
   -> String
-formatType indentation indent t = case t of
+formatType indentation indent lines t = case t of
   CST.TypeVar name -> 
     formatName indent blank name
   CST.TypeConstructor qualifiedName ->
@@ -1450,32 +1448,32 @@ formatType indentation indent t = case t of
       <> formatTypeVarBindings indentation indent (NE.toArray typeVarBindings)
       <> formatSourceToken indent blank dot
       <> prefix
-      <> formatType indentation indent tailType
+      <> formatType indentation indent lines tailType
     where 
       prefix = case lines of
         MultipleLines -> newline <> indent
         SingleLine -> space 
   CST.TypeKinded typo colons kind ->
-    formatType indentation indent typo 
+    formatType indentation indent lines typo 
       <> space
       <> formatSourceToken indent blank colons
       <> prefix
-      <> formatType indentation indented kind
+      <> formatType indentation indented lines kind
     where
       { indented, prefix } = case lines of
         MultipleLines -> { indented: indent <> indentation, prefix: newline <> indent } 
         SingleLine -> { indented: indent, prefix: space }
   CST.TypeApp typo types ->
-    formatType indentation indent typo
+    formatType indentation indent lines typo
       <> formatTypes types -- [TODO] Verify that this works
     where
       { indented, prefix } = case lines of
         MultipleLines -> { indented: indent <> indentation, prefix: newline <> indent } 
         SingleLine -> { indented: indent, prefix: space }
 
-      formatTypes = foldMap (pure prefix <> formatType indentation indented)
+      formatTypes = foldMap (\t -> prefix <> formatType indentation indented lines t)
   CST.TypeOp typo types ->
-    formatType indentation indent typo
+    formatType indentation indent lines typo
       <> foldMap formatOp types -- [TODO] Verify
     where
       { indented, prefix } = case lines of
@@ -1485,15 +1483,15 @@ formatType indentation indent t = case t of
       formatOp (op /\ anotherType) = 
         formatQualifiedName indented prefix op
         <> prefix
-        <> formatType indentation indented anotherType
+        <> formatType indentation indented lines anotherType
   CST.TypeOpName op ->
     formatQualifiedName indent blank op
   CST.TypeArrow t1 arrow t2 -> 
-    formatType indentation indent t1
+    formatType indentation indent lines t1
       <> space
       <> formatSourceToken indent blank arrow
       <> prefix
-      <> formatType indentation indent t2
+      <> formatType indentation indent lines t2
     where
       prefix = case lines of
         MultipleLines -> newline <> indent
@@ -1501,28 +1499,26 @@ formatType indentation indent t = case t of
   CST.TypeArrowName arrowName ->
     formatSourceToken indent blank arrowName
   CST.TypeConstrained constraint arrow typo ->
-    formatType indentation indent constraint
+    formatType indentation indent lines constraint
       <> space
       <> formatSourceToken indent blank arrow
       <> prefix
-      <> formatType indentation indent typo
+      <> formatType indentation indent lines typo
     where
       prefix = case lines of
         MultipleLines -> newline <> indent
         SingleLine -> space
   CST.TypeParens wrapped -> 
-    formatParens lines indentation indent (formatType indentation) wrapped
+    formatParens lines indentation indent (\x -> formatType indentation x lines) wrapped
   CST.TypeUnaryRow sourceToken typo ->
     formatSourceToken indent blank sourceToken
       <> prefix
-      <> formatType indentation indent typo
+      <> formatType indentation indent lines typo
     where
       prefix = case lines of
         MultipleLines -> newline <> indent
         SingleLine -> space
   CST.TypeError e -> absurd e
-  where
-    lines = singleOrMultiline t
 
 formatLabeled
   :: forall a b
@@ -1555,12 +1551,13 @@ formatLabeledName
   -> Indent
   -> CST.Labeled (CST.Name n) (CST.Type Void) 
   -> String
-formatLabeledName indentation indent = 
+formatLabeledName indentation indent labeledName = 
   formatLabeled 
     indentation
     indent
     (formatName indent blank)
-    (formatType indentation)
+    (\x -> formatType indentation x (singleOrMultiline labeledName))
+    labeledName
 
 formatParens
   :: forall a 
@@ -1600,7 +1597,7 @@ formatRow lines indentation indent (CST.Row { labels, tail }) = case labels, tai
     before
       <> formatSourceToken indent blank bar
       <> space
-      <> formatType indentation indent tailType
+      <> formatType indentation indent lines tailType
       <> after
     where 
       { before, after } = 
@@ -1613,7 +1610,7 @@ formatRow lines indentation indent (CST.Row { labels, tail }) = case labels, tai
       <> prefix
       <> formatSourceToken indent blank bar
       <> space
-      <> formatType indentation indent tailType
+      <> formatType indentation indent lines tailType
       <> after
     where
       { before, indented, after, prefix } = 
@@ -1746,11 +1743,11 @@ formatWrappedRow indentation indent wrapped@(CST.Wrapped { open, value: row, clo
       <> formatSourceToken indent blank close
   where 
   lines = singleOrMultiline wrapped
-  beforeLabel = if isJust $ _.labels $ un CST.Row row then space else blank
     
-  { before, after } = case lines of
-    MultipleLines -> { before: beforeLabel, after: newline <> indent }
-    SingleLine -> { before: blank, after: blank }
+  before /\ after = case row, lines of
+    CST.Row { labels: Just _ }, MultipleLines -> space /\ (newline <> indent)
+    CST.Row { labels: Nothing }, MultipleLines -> blank /\ (newline <> indent)
+    _, SingleLine -> blank /\ blank
     
 type Indentation = String -- [TODO] Use Numbers
 type Indent = String
