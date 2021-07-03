@@ -43,8 +43,8 @@ shouldBeGolden actual@(Actual content) (GoldenFile path) = do
     fail $ "Recreated " <> path
 
 shouldHaveNoDiff' ∷ Actual -> String -> Expected -> Aff Unit
-shouldHaveNoDiff' (Actual v1) expectedName (Expected v2) =
-  unless (v1 == v2)
+shouldHaveNoDiff' (Actual actual) expectedName (Expected expected) =
+  unless (actual == expected)
     do
       let
         before =
@@ -72,9 +72,9 @@ shouldHaveNoDiff' (Actual v1) expectedName (Expected v2) =
           <div>
       """
       let after = "</div></body></html>"
-      let diff = getPrettyHtml expectedName v1 v2
+      let diff = getPrettyHtml expectedName actual expected
       path <- writeToTmpFile $ before <> diff <> after
-      fail <<< show $ "The two JSON values are different. The diff is saved here: file://" <> path
+      fail <<< show $ "The diff is saved here: file://" <> path
 
 shouldHaveNoDiff ∷ Actual -> Expected -> Aff Unit
 shouldHaveNoDiff a = shouldHaveNoDiff' a "expected"

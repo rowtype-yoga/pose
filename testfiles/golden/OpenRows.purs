@@ -1,5 +1,6 @@
 module OpenRows where
 
-type Foo foo =
-  (     | foo
- )
+type Foo foo
+  = (
+    | foo
+    )

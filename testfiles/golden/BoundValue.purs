@@ -1,6 +1,7 @@
 module BoundValue where
 
-newtype Foo a = Foo a
+newtype Foo a
+  = Foo a
 
 foo :: Int
 foo = x

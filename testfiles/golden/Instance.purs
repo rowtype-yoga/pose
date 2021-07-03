@@ -9,11 +9,16 @@ instance barBaz :: Bar Baz where
 
 derive instance eqBaz :: Eq Baz
 
-newtype Bar = Bar Baz
+newtype Bar
+  = Bar Baz
 
 derive newtype instance eqBar :: Eq Bar
 
-instance quxCorGarIntBool :: Qux
-                             Cor (Gar
-          Int Bool) where
+instance quxCorGarIntBool ::
+  Qux
+    Cor
+    ( Gar
+        Int
+        Bool
+    ) where
   qux = true

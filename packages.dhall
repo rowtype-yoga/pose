@@ -122,6 +122,6 @@ with language-cst-parser =
       , "tuples"
       , "typelevel-prelude"
       ]
-    , repo = "https://github.com/natefaubion/purescript-language-cst-parser.git"
-    , version = "v0.7.1"
+    , repo = "https://github.com/i-am-the-slime/purescript-language-cst-parser.git"
+    , version = "58dd948"
     }

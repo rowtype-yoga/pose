@@ -8,11 +8,11 @@ import Format (format)
 import PureScript.CST (RecoveredParserResult(..), parseModule)
 import PureScript.CST.Errors (printParseError)
 
-parse :: String -> String
-parse = either identity identity <<< parse'
+parseAndFormat :: String -> String
+parseAndFormat = either identity identity <<< parseAndFormat'
   
-parse' :: String -> Either String String
-parse' = parseModule >>> case  _ of
+parseAndFormat' :: String -> Either String String
+parseAndFormat' = parseModule >>> case  _ of
     ParseSucceeded cst ->
       -- Right $ printModule cst
       Right $ format cst
