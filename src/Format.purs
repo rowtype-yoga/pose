@@ -2,12 +2,10 @@ module Format (format) where
 
 import Prelude
 
-import Data.Array (head)
 import Data.Array as Array
-import Data.Array.NonEmpty (last)
 import Data.Array.NonEmpty as NE
 import Data.Foldable (fold, foldMap)
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), maybe)
 import Data.Semigroup.Foldable (intercalateMap)
 import Data.Tuple (fst, snd)
 import Data.Tuple.Nested (type (/\), (/\))
@@ -529,7 +527,7 @@ formatInstanceHead indentation indent''
         constraints'
       <> formatQualifiedName indent' prefix className
       <> foldMap
-        ( \type'' -> typePrefix <> formatType indentation indent lines type'')
+        (\type'' -> typePrefix <> formatType indentation indent (singleOrMultiline type'') type'')
         types
 
 formatInstanceBinding ::
@@ -758,9 +756,11 @@ formatPatternGuard indentation indent patternGuard@(CST.PatternGuard { binder, e
       Just (binder' /\ arrow) ->
         formatBinder indentation indent binder'
           <> formatSourceToken indent space arrow
-          <> formatExprPrefix (singleOrMultilineFromRange (rangeOfPatternGuard patternGuard)) indentation indent expr'
+          <> formatExprPrefix lines indentation indent expr'
       Nothing ->
         formatExpr indentation indent expr'
+    where
+    lines = singleOrMultilineFromRange (rangeOfPatternGuard patternGuard)
 
 formatExprPrefix :: Lines -> Indentation -> Indent -> CST.Expr Void -> String
 formatExprPrefix lines indentation indent' expr =
@@ -839,7 +839,10 @@ formatExpr indentation indent'' expr'' = case expr'' of
     formatAdoBlock lines indentation indent'' adoBlock'
   CST.ExprApp expr1 expressions -> -- [CHECK] Verify
     formatExpr indentation indent'' expr1
-      <> foldMap (formatExprPrefix lines indentation indent'') expressions
+      <> foldMap formatApp  expressions
+    where
+      formatApp curr =
+        (formatExprPrefix (singleOrMultilineBetween expr1 curr) indentation indent'' curr)
   CST.ExprArray delimited' -> do
     let indent' = case lines of
           MultipleLines ->
@@ -1475,13 +1478,16 @@ formatType indentation indent lines t = case t of
 
   CST.TypeApp typo types ->
     formatType indentation indent (singleOrMultiline typo) typo
-      <> formatTypes types -- [TODO] Verify that this works
+      <> foldMap formatTypeWithPredecessor
+           (Array.zip typesArray (typo Array.: typesArray))
     where
-      { indented, prefix } = case lines of
-        MultipleLines -> { indented: indent <> indentation, prefix: newline <> indent <> indentation } 
-        SingleLine -> { indented: indent, prefix: space }
-
-      formatTypes = foldMap (\ty -> prefix <> formatType indentation indented (singleOrMultiline ty) ty)
+      typesArray = NE.toArray types
+      formatTypeWithPredecessor (curr /\ pred) =
+        prefix <> formatType indentation indented (singleOrMultiline curr) curr
+        where 
+          { indented, prefix } = case singleOrMultilineBetween curr pred of
+            MultipleLines -> { indented: indent <> indentation, prefix: newline <> indent <> indentation } 
+            SingleLine -> { indented: indent, prefix: space }
 
   CST.TypeArrow t1 arrow t2 -> 
     formatType indentation indent (singleOrMultiline t1) t1
@@ -1544,14 +1550,14 @@ formatType indentation indent lines t = case t of
     formatType indentation indent (singleOrMultiline typo) typo
       <> foldMap formatOp types -- [TODO] Verify
     where
-      { indented, prefix } = case lines of
-        MultipleLines -> { indented: indent <> indentation, prefix: newline <> indent } 
-        SingleLine -> { indented: indent, prefix: space }
-
       formatOp (op /\ anotherType) = 
         formatQualifiedName indented prefix op
         <> prefix
         <> formatType indentation indented (singleOrMultiline anotherType) anotherType
+        where
+        { indented, prefix } = case lines of
+          MultipleLines -> { indented: indent <> indentation, prefix: newline <> indent } 
+          SingleLine -> { indented: indent, prefix: space }
 
   CST.TypeOpName op ->
     formatQualifiedName indent blank op
