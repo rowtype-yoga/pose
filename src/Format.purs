@@ -546,18 +546,15 @@ formatBinder indentation indent' binder = case binder of
     formatSourceToken indent' blank char
   CST.BinderConstructor name' binders -> do
     let 
-      indentTrick = indent' <> indentation
       indent /\ prefix = case lines of
           MultipleLines ->
-            indentTrick /\ (newline <> indentTrick)
+            (indent' <> indentation) /\ (newline <> indent' <> indentation)
           SingleLine ->
             indent' /\ space
     formatQualifiedName indent' blank name'
       <> foldMap
-        ( \binder' ->
-            prefix <> formatBinder indentation indent' binder'
-        )
-        binders
+           (\binder' -> prefix <> formatBinder indentation indent' binder')
+           binders
   CST.BinderNamed name' at binder' -> do
     formatName indent' blank name'
       <> formatSourceToken indent' blank at
@@ -580,9 +577,9 @@ formatBinder indentation indent' binder = case binder of
         formatQualifiedName indent' prefix name
           <> prefix
           <> formatBinder indentation indent binder
-  CST.BinderParens wrapped' -> do
-    formatParens lines indentation indent' (formatBinder indentation) wrapped'
-  CST.BinderRecord delimited' -> do
+  CST.BinderParens wrapped ->
+    formatParens lines indentation indent' (formatBinder indentation) wrapped
+  CST.BinderRecord delimited -> do
     formatRecord
       indent'
       ( formatRecordLabeled
@@ -590,7 +587,7 @@ formatBinder indentation indent' binder = case binder of
           indent'
           (formatBinder indentation)
       )
-      delimited'
+      delimited
   CST.BinderString string _ -> do
     formatSourceToken indent' blank string
   CST.BinderTyped binder' colons type'' -> do
@@ -826,20 +823,18 @@ formatExpr indentation indent'' expr'' = case expr'' of
       <> prefix
       <> foldMap formatOne expressions 
     where
-      indent0 = indent1 <> indentation
-      indent1 = indent'' <> indentation
       (indent /\ indent' /\ prefix /\ prefix') = case lines of
         MultipleLines ->
-          ( indent0 /\
-            indent1 /\
-            (newline <> indent0) /\
-            (newline <> indent1)
+          ( (indent'' <> indentation <> indentation) /\
+            (indent'' <> indentation) /\
+            (newline <> indent'' <> indentation) /\
+            (newline <> (indent'' <> indentation) <> indentation)
           )
         SingleLine ->
           (indent'' /\ indent'' /\ space /\ space)
       formatOne (wrapped /\ expression) = 
         formatWrapped indent (formatExpr indentation indent') wrapped
-        <> prefix
+        <> prefix'
         <> formatExpr indentation indent expression   
   CST.ExprLambda lambda -> do
     formatLambda lines indentation indent'' lambda
@@ -1053,7 +1048,7 @@ formatLetIn lines indentation indent' letIn' = case letIn' of
     let 
       inPrefix /\ indent /\ prefix = case lines of
         MultipleLines ->
-          (newline <> indent' <> indentation) /\ (indent' <> indentation) /\ (newline <> indent' <> indentation <> indentation)
+          (newline <> indent') /\ (indent' <> indentation) /\ (newline <> indent' <> indentation)
         SingleLine ->
           space /\ indent' /\ space
     formatSourceToken indent' blank let'
@@ -1487,11 +1482,11 @@ formatType indentation indent lines t = case t of
   CST.TypeOpName op ->
     formatQualifiedName indent blank op
   CST.TypeArrow t1 arrow t2 -> 
-    formatType indentation indent lines t1
+    formatType indentation indent (singleOrMultiline t1) t1
       <> space
       <> formatSourceToken indent blank arrow
       <> prefix
-      <> formatType indentation indent lines t2
+      <> formatType indentation indent (singleOrMultiline t2) t2
     where
       prefix = case lines of
         MultipleLines -> newline <> indent
