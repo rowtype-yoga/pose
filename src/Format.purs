@@ -7,8 +7,9 @@ import Data.Array as Array
 import Data.Array.NonEmpty (last)
 import Data.Array.NonEmpty as NE
 import Data.Foldable (fold, foldMap)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Semigroup.Foldable (intercalateMap)
+import Data.Tuple (fst, snd)
 import Data.Tuple.Nested (type (/\), (/\))
 import PureScript.CST.Print as Print
 import PureScript.CST.Range (class RangeOf, rangeOf)
@@ -19,7 +20,7 @@ data Lines = SingleLine | MultipleLines
 singleOrMultiline :: forall a. RangeOf a => a -> Lines
 singleOrMultiline value = singleOrMultilineFromRange (rangeOf value)
 
-singleOrMultilineFromRange {start,end} =
+singleOrMultilineFromRange {start, end} =
   if start.line == end.line then SingleLine else MultipleLines
 
 singleOrMultilineBetween :: forall a b. RangeOf a => RangeOf b => a -> b -> Lines
@@ -39,6 +40,24 @@ rangeOfInstanceHead { keyword, className, types } = do
       { start: keyword.range.start
       , end
       }
+
+rangeOfPatternGuard :: (CST.PatternGuard Void) -> CST.SourceRange
+rangeOfPatternGuard (CST.PatternGuard { binder, expr }) = do
+  let 
+    { start } = maybe (rangeOf expr) (fst >>> rangeOf) binder
+    { end } = rangeOf expr
+  { start, end }
+
+rangeOfSeparated ::
+  forall a.
+  (a -> CST.SourceRange) ->
+  CST.Separated a ->
+  CST.SourceRange
+rangeOfSeparated f separated = case separated of
+  CST.Separated { head, tail } -> do
+    let headRange = f head
+    let tailRange = maybe headRange f (Array.last tail <#> snd)
+    { start: headRange.start, end: tailRange.end }
 
 format :: CST.Module Void -> String
 format = formatModule "  " -- Indentation is two spaces
@@ -549,37 +568,41 @@ formatBinder ::
   CST.Binder Void ->
   String
 formatBinder indentation indent' binder = case binder of
+
   CST.BinderArray delimited -> do
     formatArray
       lines
       indent'
       (formatBinder indentation indent')
       delimited
+
   CST.BinderBoolean boolean _ -> do
     formatSourceToken indent' blank boolean
+
   CST.BinderChar char _ -> do
     formatSourceToken indent' blank char
+
   CST.BinderConstructor name' binders -> do
     let 
-      indent /\ prefix = case lines of
-          MultipleLines ->
-            (indent' <> indentation) /\ (newline <> indent' <> indentation)
-          SingleLine ->
-            indent' /\ space
+      prefix = case singleOrMultiline binder of
+          MultipleLines -> newline <> indent' <> indentation
+          SingleLine -> space
     formatQualifiedName indent' blank name'
       <> foldMap
            (\binder' -> prefix <> formatBinder indentation indent' binder')
            binders
+
   CST.BinderNamed name' at binder' -> do
     formatName indent' blank name'
       <> formatSourceToken indent' blank at
       <> formatBinder indentation indent' binder'
+
   CST.BinderNumber negative number _ -> do
     foldMap (formatSourceToken indent' blank) negative
       <> formatSourceToken indent' blank number
+
   CST.BinderOp binder1 binders -> do
-    formatBinder indent' prefix binder1 -- [TODO] Verify
-      <> prefix 
+    formatBinder indent' prefix binder1
       <> foldMap formatNamedBinder binders
     where
       indentTrick = indent' <> indentation
@@ -592,8 +615,10 @@ formatBinder indentation indent' binder = case binder of
         formatQualifiedName indent' prefix name
           <> prefix
           <> formatBinder indentation indent binder
+
   CST.BinderParens wrapped ->
     formatParens lines indentation indent' (formatBinder indentation) wrapped
+
   CST.BinderRecord delimited -> do
     formatRecord
       indent'
@@ -603,8 +628,10 @@ formatBinder indentation indent' binder = case binder of
           (formatBinder indentation)
       )
       delimited
+
   CST.BinderString string _ -> do
     formatSourceToken indent' blank string
+
   CST.BinderTyped binder' colons type'' -> do
     let 
       indentTrick = indent' <> indentation
@@ -617,13 +644,17 @@ formatBinder indentation indent' binder = case binder of
       <> formatSourceToken indent' space colons
       <> prefix
       <> formatType indentation indent lines type''
+
   CST.BinderVar name' ->
     formatName indent' blank name'
+
   CST.BinderWildcard wildcard ->
     formatSourceToken indent' blank wildcard
+    
   CST.BinderInt negative int _  ->
     foldMap (formatSourceToken indent' blank) negative
       <> formatSourceToken indent' blank int
+
   CST.BinderError x -> absurd x
   where
     lines = singleOrMultiline binder
@@ -633,18 +664,18 @@ formatGuarded ::
   Indent ->
   CST.Guarded Void ->
   String
-formatGuarded indentation indent = case _ of
+formatGuarded indentation indent' = case _ of
   CST.Guarded guardedExprs -> do
-    let indented = indent <> indentation
+    let indent = indent' <> indentation
     foldMap
       ( \guardedExpr ->
-          (newline <> indented)
-            <> formatGuardedExpr indentation indented guardedExpr
+          (newline <> indent)
+            <> formatGuardedExpr indentation indent guardedExpr
       )
       guardedExprs
   CST.Unconditional separator whereToken -> do
-    formatSourceToken indent space separator
-      <> formatWhere indentation indent whereToken
+    formatSourceToken indent' space separator
+      <> formatWhere indentation indent' whereToken
 
 formatWhere ::
   Indentation ->
@@ -678,19 +709,23 @@ formatLetBinding ::
   CST.LetBinding Void ->
   String
 formatLetBinding indentation indent' prefix suffix = case _ of
+
   CST.LetBindingName valueBindingFields' -> do
     prefix
       <> formatValueBindingFields indentation indent' valueBindingFields'
       <> suffix
+
   CST.LetBindingPattern binder' equals where'' -> do
     prefix
       <> formatBinder indentation indent' binder'
       <> formatSourceToken indent' space equals
       <> formatWhere indentation indent' where''
       <> suffix
+
   CST.LetBindingSignature labeled' -> do
-    prefix
+    prefix 
       <> formatLabeledNameType indentation indent' labeled'
+
   CST.LetBindingError e -> absurd e
 
 formatGuardedExpr ::
@@ -704,27 +739,26 @@ formatGuardedExpr indentation indent' expr = case expr of
     formatSourceToken indent' blank bar
       <> space
       <> formatSeparated
-        (singleOrMultiline expr)
-        indent
+        (singleOrMultilineFromRange (rangeOfSeparated rangeOfPatternGuard patternGuards))
+        indent'
         space
-        (formatPatternGuard (singleOrMultiline expr) indentation indent)
+        (formatPatternGuard indentation indent)
         patternGuards
       <> space
       <> formatSourceToken indent' blank separator
       <> formatWhere indentation indent' where''
 
 formatPatternGuard ::
-  Lines ->
   Indentation ->
   Indent ->
   CST.PatternGuard Void ->
   String
-formatPatternGuard lines indentation indent patternGuard@(CST.PatternGuard { binder, expr: expr'}) =
+formatPatternGuard indentation indent patternGuard@(CST.PatternGuard { binder, expr: expr'}) =
     case binder of
       Just (binder' /\ arrow) ->
         formatBinder indentation indent binder'
           <> formatSourceToken indent space arrow
-          <> formatExprPrefix lines indentation indent expr'
+          <> formatExprPrefix (singleOrMultilineFromRange (rangeOfPatternGuard patternGuard)) indentation indent expr'
       Nothing ->
         formatExpr indentation indent expr'
 
@@ -819,8 +853,8 @@ formatExpr indentation indent'' expr'' = case expr'' of
       delimited'
   CST.ExprBoolean boolean _ ->
     formatSourceToken indent'' blank boolean
-  CST.ExprCase caseOf' ->
-    formatCaseOf lines indentation indent'' caseOf'
+  CST.ExprCase caseOf ->
+    formatCaseOf lines indentation indent'' caseOf
   CST.ExprChar char _ ->
     formatSourceToken indent'' blank char
   CST.ExprConstructor name -> 
@@ -1204,11 +1238,11 @@ formatCaseOf ::
 formatCaseOf lines indentation indent' caseOf' = case caseOf' of
   { keyword: case', head, of: of', branches } -> do
     let 
-      indentTrick = indent' <> indentation
       indent /\ prefix = case lines of
-        MultipleLines -> indentTrick /\ (newline <> indentTrick)
+        MultipleLines -> (indent' <> indentation) /\ (newline <> indent' <> indentation)
         SingleLine -> indent' /\ space
-    formatSourceToken  indent' blank case'
+      
+    formatSourceToken indent' blank case'
       <> space
       <> formatSeparated
         (singleOrMultiline head)
@@ -1219,7 +1253,7 @@ formatCaseOf lines indentation indent' caseOf' = case caseOf' of
       <> space
       <> formatSourceToken indent' blank of'
       <> foldMap
-        ( \(binders /\ guarded') ->
+        ( \(binders /\ guarded) ->
             prefix
               <> formatSeparated
                 (singleOrMultiline binders)
@@ -1227,7 +1261,7 @@ formatCaseOf lines indentation indent' caseOf' = case caseOf' of
                 space
                 (formatBinder indentation indent)
                 binders
-              <> formatGuarded indentation indent guarded'
+              <> formatGuarded indentation indent guarded
         )
         branches
 
@@ -1507,7 +1541,7 @@ formatType indentation indent lines t = case t of
         SingleLine -> { indented: indent, prefix: space }
 
   CST.TypeOp typo types ->
-    formatType indentation indent lines typo
+    formatType indentation indent (singleOrMultiline typo) typo
       <> foldMap formatOp types -- [TODO] Verify
     where
       { indented, prefix } = case lines of
@@ -1517,7 +1551,7 @@ formatType indentation indent lines t = case t of
       formatOp (op /\ anotherType) = 
         formatQualifiedName indented prefix op
         <> prefix
-        <> formatType indentation indented lines anotherType
+        <> formatType indentation indented (singleOrMultiline anotherType) anotherType
 
   CST.TypeOpName op ->
     formatQualifiedName indent blank op

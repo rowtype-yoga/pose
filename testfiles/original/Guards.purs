@@ -7,7 +7,7 @@ altAppend
   -> NonEmptyArray (RouteParser a)
 altAppend as bs
   | Segment pre a <- NEA.last as
-  , Segment pre' b <- NEA.head bs
+   , Segment pre' b <- NEA.head bs
   , pre == pre' =
       let
         bs' =
