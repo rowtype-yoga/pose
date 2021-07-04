@@ -7,6 +7,7 @@ bar = do if true then 0 else
 
 baz = do if true then do 0 else do
            x <- pure 1
+
            y <- pure 0
            pure (x + y)
 
@@ -15,3 +16,13 @@ qux = do if true then do
            y <- pure 0
            pure (x + y)
            else do 1
+
+something = do
+  let inline = 12
+  let 
+    noSpaceAfterMe = "a"
+    heinz = 12
+
+
+    keinz = 8
+  pure 2

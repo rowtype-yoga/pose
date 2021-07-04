@@ -3,7 +3,9 @@ module Format (format) where
 import Prelude
 import Data.Array as Array
 import Data.Array.NonEmpty as NE
+import Data.Array.NonEmpty.Internal (NonEmptyArray)
 import Data.Foldable (fold, foldMap)
+import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (ala)
@@ -696,7 +698,8 @@ formatWhere settings@{ indentation } indent' (CST.Where { expr: expr', bindings:
     (wherePrefix <> newline <> indent)
       <> formatSourceToken settings indent blank where''
       <> whereSuffix
-      <> formatLetBindings letBindings'
+      <> (newline <> indent)
+      <> (formatLetBindings settings indent) letBindings'
     where
     wherePrefix = if precedingEmptyLines where''.leadingComments > 1 then newline else blank
 
@@ -705,23 +708,6 @@ formatWhere settings@{ indentation } indent' (CST.Where { expr: expr', bindings:
         newline
       else
         blank
-
-  formatLetBindings letBindings' =
-    foldMap
-      formatLetBindingWithFollowing
-      ( NE.zip letBindings'
-          (NE.snoc' (Just <$> NE.tail letBindings') Nothing)
-      )
-
-  formatLetBindingWithFollowing (current /\ maybeFollowing) = formatLetBinding settings indent (newline <> indent) suffix current
-    where
-    suffix = case maybeFollowing of
-      Nothing → blank -- no newline on last entry
-      Just followingLetBinding →
-        if isPrecededByBlankLines followingLetBinding then
-          newline
-        else
-          blank
 
 formatLetBinding ∷
   Settings →
@@ -1104,10 +1090,8 @@ formatLetIn lines settings@{ indentation } indent' letIn' = case letIn' of
         MultipleLines → (newline <> indent') /\ (indent' <> indentation) /\ (newline <> indent' <> indentation)
         SingleLine → space /\ indent' /\ space
     formatSourceToken settings indent' blank let'
-      <> foldMap
-          (formatLetBinding settings indent prefix newline)
-          (NE.init letBindings)
-      <> formatLetBinding settings indent prefix blank (NE.last letBindings)
+      <> prefix
+      <> (formatLetBindings settings indent letBindings)
       <> inPrefix
       <> formatSourceToken settings indent' blank in'
       <> prefix
@@ -1188,13 +1172,11 @@ formatDoBlock ∷
   Indent →
   CST.DoBlock Void →
   String
-formatDoBlock lines settings@{ indentation } indent' doBlock' = case doBlock' of
+formatDoBlock lines settings@{ indentation } indent' = case _ of
   { keyword: do', statements: doStatements } → do
     let
-      indentTrick = indent' <> indentation
-
       indent /\ prefix = case lines of
-        MultipleLines → indentTrick /\ (newline <> indentTrick)
+        MultipleLines → (indent' <> indentation) /\ (newline <> indent' <> indentation)
         SingleLine → indent' /\ space
     formatSourceToken settings indent' blank do'
       <> foldMap
@@ -1216,20 +1198,39 @@ formatDoStatement settings@{ indentation } indent' doStatement' = case doStateme
       <> formatExprPrefix (singleOrMultiline doStatement') settings indent' expr'
   CST.DoDiscard expr' → do
     formatExpr settings indent' expr'
-  CST.DoLet let' letBindings → do
-    let
-      indent = indent' <> indentation
-    formatSourceToken settings indent' blank let'
-      <> foldMap
-          (formatLetBinding settings indent (newline <> indent) newline)
-          (NE.init letBindings)
-      <> formatLetBinding
-          settings
-          indent
-          (newline <> indent)
-          blank
-          (NE.last letBindings)
+  CST.DoLet let' letBindings'' → do
+    case lines of
+      MultipleLines →
+        formatSourceToken settings indent' blank let'
+          <> (newline <> indent)
+          <> (formatLetBindings settings indent) letBindings''
+      SingleLine →
+        formatSourceToken settings indent' blank let'
+          <> formatLetBinding settings space space blank (NE.head letBindings'')
+    where
+    indent = indent' <> indentation
+    lines = singleOrMultiline doStatement'
   CST.DoError e → absurd e
+
+formatLetBindings ∷ Settings → Indent → NonEmptyArray (CST.LetBinding Void) → String
+formatLetBindings settings indent letBindings =
+  foldMapWithIndex
+    formatLetBindingWithFollowing
+    ( NE.zip letBindings
+        (NE.snoc' (Just <$> NE.tail letBindings) Nothing)
+    )
+  where
+  formatLetBindingWithFollowing idx (current /\ maybeFollowing) = do
+    formatLetBinding settings indent prefix suffix current
+    where
+    prefix = if idx == 0 then blank else (newline <> indent)
+    suffix = case maybeFollowing of
+      Nothing → blank -- no newline on last entry
+      Just followingLetBinding →
+        if isPrecededByBlankLines followingLetBinding then
+          newline
+        else
+          blank
 
 formatCaseOf ∷
   Lines →

@@ -21,3 +21,12 @@ qux = do
     y <- pure 0
     pure (x + y)
   else do 1
+
+something = do
+  let inline = 12
+  let
+    noSpaceAfterMe = "a"
+    heinz = 12
+
+    keinz = 8
+  pure 2
