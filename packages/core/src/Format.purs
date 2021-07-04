@@ -583,7 +583,8 @@ formatValueBindingFields ∷
   Indent →
   CST.ValueBindingFields Void →
   String
-formatValueBindingFields settings@{ indentation } indent { name, binders, guarded } =
+formatValueBindingFields
+  settings@{ indentation } indent { name, binders, guarded } =
   formatName settings indent blank name
     <> foldMap formatValueBinder binders
     <> formatGuarded settings indent guarded

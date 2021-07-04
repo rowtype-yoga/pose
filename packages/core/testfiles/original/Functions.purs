@@ -28,3 +28,13 @@ aFunctionWithMixedParameters
   d e 
 
   f = a + b + c
+
+aRecordFunction {
+  a,
+  b
+} = a + b 
+
+aDeconstructedFunction blurb@{
+  a,
+  b
+} = a + b 
