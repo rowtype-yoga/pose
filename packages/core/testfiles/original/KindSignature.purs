@@ -10,3 +10,6 @@ newtype Baz a = Baz (Bar a)
 type Qux :: forall a. a -> (a -> a) ->
             Type
 type Qux a b = Int
+
+type PureScriptOptions :: forall k. k -> Row k -> Row k
+type PureScriptOptions a r = (symbolStyle :: a | r)

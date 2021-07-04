@@ -13,7 +13,6 @@ instance bazQux ::
       b
   ) =>
   Baz (Qux a b)
-
 foo ::
   ( Array
       Int
