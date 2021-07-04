@@ -6,7 +6,7 @@ import Data.Array.NonEmpty as NE
 import Data.Array.NonEmpty.Internal (NonEmptyArray)
 import Data.Foldable (fold, foldMap)
 import Data.FoldableWithIndex (foldMapWithIndex)
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (ala)
 import Data.Semigroup.Foldable (intercalateMap)
@@ -244,13 +244,13 @@ formatImport ∷
   CST.Import Void →
   String
 formatImport settings@{ indentation } indent' import'' = case import'' of
-  CST.ImportClass class' name' → do
+  CST.ImportClass class' name' →
     formatSourceToken settings indent' blank class'
       <> formatName settings indent' space name'
-  CST.ImportKind kind name' → do
+  CST.ImportKind kind name' →
     formatSourceToken settings indent' blank kind
       <> formatName settings indent' space name'
-  CST.ImportOp name' → do
+  CST.ImportOp name' →
     formatName settings indent' blank name'
   CST.ImportType name' dataMembers' → do
     let
@@ -259,10 +259,10 @@ formatImport settings@{ indentation } indent' import'' = case import'' of
         SingleLine → indent'
     formatName settings indent' blank name'
       <> foldMap (formatDataMembers settings indent) dataMembers'
-  CST.ImportTypeOp type'' name' → do
+  CST.ImportTypeOp type'' name' →
     formatSourceToken settings indent' blank type''
       <> formatName settings indent' space name'
-  CST.ImportValue name' → do
+  CST.ImportValue name' →
     formatName settings indent' blank name'
   CST.ImportError e → absurd e
   where
@@ -277,16 +277,16 @@ formatDataMembers settings@{ indentation } indent' dataMembers' = case dataMembe
   CST.DataAll sourceToken' → do
     formatSourceToken settings indent' blank sourceToken'
   CST.DataEnumerated delimited' → do
-    let
-      (indent /\ prefix) = case span of
-        MultipleLines → (indent' <> indentation) /\ (newline <> indent')
-        SingleLine → (indent' /\ blank)
     prefix
       <> formatDelimited
           settings
           indent'
           (formatName settings indent blank)
           delimited'
+    where
+    (indent /\ prefix) = case span of
+      MultipleLines → (indent' <> indentation) /\ (newline <> indent')
+      SingleLine → (indent' /\ blank)
   where
   span = singleOrMultiline dataMembers'
 
@@ -297,7 +297,7 @@ formatDelimited ∷
   (a → String) →
   CST.Delimited a →
   String
-formatDelimited settings indent formatValue delimited = do
+formatDelimited settings indent formatValue delimited =
   formatWrapped
     settings
     indent
@@ -320,7 +320,7 @@ formatDeclarations settings decls =
     formatWithNext
     (Array.zip decls (Array.snoc (Just <$> Array.drop 1 decls) Nothing))
   where
-  formatWithNext (declaration /\ maybeFollowingDeclaration) = do
+  formatWithNext (declaration /\ maybeFollowingDeclaration) =
     newline <> formatDeclaration settings blank followedByBlanks declaration
     where
     followedByBlanks = case maybeFollowingDeclaration of
@@ -350,7 +350,8 @@ formatDeclaration settings@{ indentation } indent followedByBlankLines declarati
       <> indented
       <> formatSourceToken settings indented blank equals
       <> space
-      <> formatType settings (indented <> indentation) (singleOrMultiline typo) typo
+      <> formatType
+          settings (indented <> indentation) (singleOrMultiline typo) typo
       <> if followedByBlankLines then newline else blank
   CST.DeclNewtype dataHead equals name typo → do
     formatDataHead settings indent dataHead
@@ -373,8 +374,8 @@ formatDeclaration settings@{ indentation } indent followedByBlankLines declarati
     formatMember (whereClause /\ labeleds) =
       formatSourceToken settings indent space whereClause
         <> intercalateMap (newline <> indented) formatLabeledMember labeleds
-
-    formatLabeledMember labeled = newline <> indented <> formatLabeledNameType settings indented labeled
+    formatLabeledMember labeled =
+      newline <> indented <> formatLabeledNameType settings indented labeled
   CST.DeclInstanceChain instances →
     formatSeparated
       settings
@@ -398,7 +399,8 @@ formatDeclaration settings@{ indentation } indent followedByBlankLines declarati
   CST.DeclValue valueBindingFields →
     formatValueBindingFields settings indent valueBindingFields
       <> if followedByBlankLines then newline else blank
-  CST.DeclFixity fixityFields → formatFixityFields settings indent fixityFields <> newline
+  CST.DeclFixity fixityFields →
+    formatFixityFields settings indent fixityFields <> newline
   CST.DeclForeign foreign'' import'' foreign''' →
     formatSourceToken settings indent blank foreign''
       <> formatSourceToken settings indent space import''
@@ -427,7 +429,7 @@ formatRole ∷
   Indent →
   (CST.SourceToken /\ CST.Role) →
   String
-formatRole settings@{ indentation } indent (sourceToken /\ role) = do
+formatRole settings@{ indentation } indent (sourceToken /\ role) =
   formatSourceToken settings indentation indent sourceToken
 
 formatForeign ∷
@@ -436,14 +438,14 @@ formatForeign ∷
   CST.Foreign Void →
   String
 formatForeign settings indent' foreign'' = case foreign'' of
-  CST.ForeignData data' labeled' → do
+  CST.ForeignData data' labeled' →
     formatSourceToken settings indent' blank data'
       <> space
       <> formatLabeledNameKind settings indent' labeled'
-  CST.ForeignKind kind name' → do
+  CST.ForeignKind kind name' →
     formatSourceToken settings indent' blank kind
       <> formatName settings indent' space name'
-  CST.ForeignValue labeled' → do
+  CST.ForeignValue labeled' →
     formatLabeledNameType settings indent' labeled'
 
 formatLabeledNameKind ∷
@@ -467,7 +469,7 @@ formatFixityFields ∷
   Indent →
   CST.FixityFields →
   String
-formatFixityFields settings indent { keyword: infix' /\ _, prec: precedence /\ _, operator } = do
+formatFixityFields settings indent { keyword: infix' /\ _, prec: precedence /\ _, operator } =
   formatSourceToken settings indent blank infix'
     <> formatSourceToken settings indent space precedence
     <> space
@@ -479,12 +481,12 @@ formatFixityOp ∷
   CST.FixityOp →
   String
 formatFixityOp settings indent fixityOp' = case fixityOp' of
-  CST.FixityType type'' name' as op → do
+  CST.FixityType type'' name' as op →
     formatSourceToken settings indent blank type''
       <> formatQualifiedName settings indent space name'
       <> formatSourceToken settings indent space as
       <> formatName settings indent space op
-  CST.FixityValue name' as op → do
+  CST.FixityValue name' as op →
     formatQualifiedName settings indent blank name'
       <> formatSourceToken settings indent space as
       <> formatName settings indent space op
@@ -501,9 +503,7 @@ formatInstance settings@{ indentation } indent (CST.Instance { head, body }) =
   formatBindings (whereClause /\ instanceBindings) =
     formatSourceToken settings indent space whereClause
       <> foldMap formatBinding instanceBindings
-
   formatBinding instanceBinding = newline <> indented <> formatInstanceBinding settings indented instanceBinding
-
   indented = indent <> indentation
 
 formatInstanceHead ∷
@@ -511,7 +511,10 @@ formatInstanceHead ∷
   Indent →
   CST.InstanceHead Void →
   String
-formatInstanceHead settings@{ indentation } indent'' instanceHead@{ keyword: instance''
+formatInstanceHead
+  settings@{ indentation }
+  indent''
+  instanceHead@{ keyword: instance''
 , nameAndSeparator
 , constraints: constraints'
 , className
@@ -519,7 +522,6 @@ formatInstanceHead settings@{ indentation } indent'' instanceHead@{ keyword: ins
 } = do
   let
     lines = rangeOfInstanceHead instanceHead
-
     (indent /\ indent' /\ prefix) = case lines of
       MultipleLines →
         (indent'' <> indentation <> indentation)
@@ -553,7 +555,10 @@ formatInstanceHead settings@{ indentation } indent'' instanceHead@{ keyword: ins
         constraints'
     <> formatQualifiedName settings indent' prefix className
     <> foldMap
-        (\type'' → typePrefix <> formatType settings indent (singleOrMultiline type'') type'')
+        ( \type'' →
+            typePrefix
+              <> formatType settings indent (singleOrMultiline type'') type''
+        )
         types
 
 formatInstanceBinding ∷
@@ -562,9 +567,9 @@ formatInstanceBinding ∷
   CST.InstanceBinding Void →
   String
 formatInstanceBinding settings indent = case _ of
-  CST.InstanceBindingSignature labeled → do
+  CST.InstanceBindingSignature labeled →
     formatLabeledNameType settings indent labeled
-  CST.InstanceBindingName valueBindingFields → do
+  CST.InstanceBindingName valueBindingFields →
     formatValueBindingFields settings indent valueBindingFields
 
 -- | This is for basics like function or value definitions
@@ -578,12 +583,18 @@ formatValueBindingFields ∷
   Indent →
   CST.ValueBindingFields Void →
   String
-formatValueBindingFields settings indent { name, binders, guarded } =
+formatValueBindingFields settings@{ indentation } indent { name, binders, guarded } =
   formatName settings indent blank name
     <> foldMap formatValueBinder binders
     <> formatGuarded settings indent guarded
   where
-  formatValueBinder binder = space <> formatBinder settings indent binder
+  formatValueBinder binder =
+    valueBinderSeparator <> formatBinder settings indent binder
+    where
+    valueBinderSeparator = case lines of
+      SingleLine → space
+      MultipleLines → newline <> indent <> indentation
+    lines = if isPrecededByNewline binder then MultipleLines else SingleLine
 
 formatBinder ∷
   Settings →
@@ -591,16 +602,16 @@ formatBinder ∷
   CST.Binder Void →
   String
 formatBinder settings@{ indentation } indent' binder = case binder of
-  CST.BinderArray delimited → do
+  CST.BinderArray delimited →
     formatArray
       settings
       lines
       indent'
       (formatBinder settings indent')
       delimited
-  CST.BinderBoolean boolean _ → do
+  CST.BinderBoolean boolean _ →
     formatSourceToken settings indent' blank boolean
-  CST.BinderChar char _ → do
+  CST.BinderChar char _ →
     formatSourceToken settings indent' blank char
   CST.BinderConstructor name' binders → do
     let
@@ -612,14 +623,14 @@ formatBinder settings@{ indentation } indent' binder = case binder of
           (\binder' → prefix <> formatBinder settings indent' binder')
           binders
   -- with @ sign
-  CST.BinderNamed name' at binder' → do
+  CST.BinderNamed name' at binder' →
     formatName settings indent' blank name'
       <> formatSourceToken settings indent' blank at
       <> formatBinder settings indent' binder'
-  CST.BinderNumber negative number _ → do
+  CST.BinderNumber negative number _ →
     foldMap (formatSourceToken settings indent' blank) negative
       <> formatSourceToken settings indent' blank number
-  CST.BinderOp binder1 binders → do
+  CST.BinderOp binder1 binders →
     formatBinder (settings { indentation = indent' }) prefix binder1
       <> foldMap formatNamedBinder binders
     where
@@ -656,7 +667,8 @@ formatBinder settings@{ indentation } indent' binder = case binder of
       <> prefix
       <> formatType settings indent lines type''
   CST.BinderVar name → formatName settings indent' blank name
-  CST.BinderWildcard wildcard → formatSourceToken settings indent' blank wildcard
+  CST.BinderWildcard wildcard →
+    formatSourceToken settings indent' blank wildcard
   CST.BinderInt negative int _ →
     foldMap (formatSourceToken settings indent' blank) negative
       <> formatSourceToken settings indent' blank int
@@ -688,22 +700,27 @@ formatWhere ∷
   Indent →
   CST.Where Void →
   String
-formatWhere settings@{ indentation } indent' (CST.Where { expr: expr', bindings: letBindings'' }) = do
+formatWhere settings@{ indentation } indent' (CST.Where { expr: expr', bindings: letBindings'' }) =
   formatExprPrefix exprLines settings indent' expr'
     <> foldMap formatWhereAndBindings letBindings''
   where
   exprLines = case expr' of
     CST.ExprChar _ _ → singleOrMultiline expr' -- [FIXME] Chars are weird
-    _ → if isPrecededByNewline expr' then MultipleLines else singleOrMultiline expr'
+    _ →
+      if isPrecededByNewline expr' then
+        MultipleLines
+      else
+        singleOrMultiline expr'
   indent = indent' <> indentation
-  formatWhereAndBindings (where'' /\ letBindings') = do
+  formatWhereAndBindings (where'' /\ letBindings') =
     (wherePrefix <> newline <> indent)
       <> formatSourceToken settings indent blank where''
       <> whereSuffix
       <> (newline <> indent)
       <> (formatLetBindings settings indent) letBindings'
     where
-    wherePrefix = if precedingEmptyLines where''.leadingComments > 1 then newline else blank
+    wherePrefix =
+      if precedingEmptyLines where''.leadingComments > 1 then newline else blank
     whereSuffix =
       if isPrecededByBlankLines (NE.head letBindings') then
         newline
@@ -739,7 +756,8 @@ formatGuardedExpr ∷
   CST.GuardedExpr Void →
   String
 formatGuardedExpr settings@{ indentation } indent' expr = case expr of
-  CST.GuardedExpr { bar, patterns: patternGuards, separator, where: where'' } → do
+  CST.GuardedExpr
+    { bar, patterns: patternGuards, separator, where: where'' } → do
     let
       indent = indent' <> indentation
     formatSourceToken settings indent' blank bar
@@ -770,7 +788,8 @@ formatPatternGuard settings@{ indentation } indent patternGuard@(CST.PatternGuar
   lines = singleOrMultilineFromRange (rangeOfPatternGuard patternGuard)
 
 formatExprPrefix ∷ Lines → Settings → Indent → CST.Expr Void → String
-formatExprPrefix lines settings@{ indentation } indent' expr = prefix <> formatExpr settings indent expr
+formatExprPrefix lines settings@{ indentation } indent' expr =
+  prefix <> formatExpr settings indent expr
   where
   indent = case expr of
     CST.ExprAdo _ → indent'
@@ -1106,7 +1125,7 @@ formatLambda ∷
   CST.Lambda Void →
   String
 formatLambda lines settings@{ indentation } indent' lambda' = case lambda' of
-  { symbol: reverseSolidus, binders, arrow, body: expr' } → do
+  { symbol: reverseSolidus, binders, arrow, body: expr' } →
     formatSourceToken settings indent' blank reverseSolidus
       <> foldMap (\binder' → formatBinder settings indent' binder' <> space) binders
       <> formatSourceToken settings indent' blank arrow
