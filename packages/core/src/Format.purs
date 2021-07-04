@@ -9,13 +9,26 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Semigroup.Foldable (intercalateMap)
 import Data.Tuple (fst, snd)
 import Data.Tuple.Nested (type (/\), (/\))
+import Debug (spy)
 import PureScript.CST.Print as Print
-import PureScript.CST.Range (class RangeOf, rangeOf)
+import PureScript.CST.Range (class RangeOf, rangeOf, tokensOf)
+import PureScript.CST.Range.TokenList as TokensOf
 import PureScript.CST.Types as CST
 import Settings (Settings)
 
 data Lines
-  = SingleLine| MultipleLines
+  = SingleLine | MultipleLines
+
+precedingEmptyLines :: Array (CST.Comment CST.LineFeed) -> Int
+precedingEmptyLines = 
+  Array.reverse >>> Array.dropWhile commentIsSpace >>> Array.head >>> case _ of
+  Just (CST.Line _ n) -> n
+  _ -> 0
+
+commentIsSpace :: forall c. CST.Comment c -> Boolean
+commentIsSpace = case _ of
+  CST.Space _ -> true
+  _ -> false
 
 singleOrMultiline :: forall a. RangeOf a => a -> Lines
 singleOrMultiline value = singleOrMultilineFromRange (rangeOf value)
@@ -662,24 +675,32 @@ formatWhere ::
   CST.Where Void ->
   String
 formatWhere settings@{ indentation } indent' (CST.Where { expr: expr', bindings: letBindings'' }) = do
-  let
-    indent = indent' <> indentation
   formatExprPrefix (singleOrMultiline expr') settings indent' expr'
-    <> foldMap
-        ( \(where'' /\ letBindings') ->
-            (newline <> indent)
-              <> formatSourceToken settings indent blank where''
-              <> foldMap
-                  (formatLetBinding settings indent (newline <> indent) newline)
-                  (NE.init letBindings')
-              <> formatLetBinding
-                  settings
-                  indent
-                  (newline <> indent)
-                  blank
-                  (NE.last letBindings')
+    <> foldMap formatWhereAndBindings letBindings''
+  where
+    indent = indent' <> indentation
+    formatWhereAndBindings (where'' /\ letBindings') = do
+      (newline <> indent)
+        <> formatSourceToken settings indent blank where''
+        <> formatLetBindings letBindings'
+    formatLetBindings letBindings' =
+      foldMap
+        formatLetBindingWithFollowing
+        ( NE.zip letBindings' 
+           (NE.snoc' (Just <$> NE.tail letBindings') Nothing)
         )
-        letBindings''
+  
+    formatLetBindingWithFollowing (current /\ maybeFollowing) = 
+      formatLetBinding settings indent (newline <> indent) suffix current
+      where
+        suffix = case maybeFollowing of
+          Nothing -> blank -- no newline on last entry
+          Just followingLetBinding -> case TokensOf.head (tokensOf followingLetBinding) of 
+            Just { leadingComments } -> 
+              if precedingEmptyLines leadingComments > 1 then 
+                newline 
+              else blank
+            Nothing -> blank
 
 formatLetBinding ::
   Settings ->

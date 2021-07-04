@@ -11,7 +11,5 @@ y ::
 y f x = { expected, unexpected }
   where
   expected = result.expected
-
   result = f x
-
   unexpected = result.unexpected
