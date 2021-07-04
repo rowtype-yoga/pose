@@ -10,7 +10,8 @@ altAppend as bs
   , Segment pre' b <- NEA.head bs
   , pre == pre' =
     let
-      bs' = NEA.cons' (Segment pre (a <|> b)) (NEA.tail bs)
+      bs' =
+        NEA.cons' (Segment pre (a <|> b)) (NEA.tail bs)
     in
       case NEA.fromArray (NEA.init as) of
         Just as' -> as' `altAppend` bs'

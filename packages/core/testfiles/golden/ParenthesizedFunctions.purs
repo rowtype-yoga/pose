@@ -13,3 +13,6 @@ y f x = { expected, unexpected }
   expected = result.expected
   result = f x
   unexpected = result.unexpected
+
+z =
+  12
