@@ -19,8 +19,11 @@ to generate this file without the comments in this block.
   , "language-cst-parser"
   , "prelude"
   , "psci-support"
+  , "record"
   , "shape-core"
   , "strings"
+  , "typelevel-prelude"
+  , "unsafe-coerce"
   ]
 , packages = ../../packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]

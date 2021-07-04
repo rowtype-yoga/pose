@@ -11,7 +11,7 @@
     "test": "test"
   },
   "scripts": {
-    "build": "spago bundle-module --main Prettier --to index.js",
+    "build": "spago bundle-module --main PrettierPlugin --to index.js",
     "test": "spago test"
   },
   "repository": {

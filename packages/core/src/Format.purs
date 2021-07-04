@@ -212,7 +212,7 @@ formatImportDeclaration settings@{ indentation } indent'' importDecl' = case imp
                   <> importPrefix
                   <> formatDelimitedNonEmpty
                       settings
-                      span -- [TODO] Probably a different span is needed here
+                      span
                       indent
                       (formatImport settings indent')
                       imports'
@@ -224,7 +224,7 @@ formatImportDeclaration settings@{ indentation } indent'' importDecl' = case imp
                 importPrefix
                   <> formatDelimitedNonEmpty
                       settings
-                      span -- [TODO] Probably a different span is needed here
+                      span
                       indent'
                       (formatImport settings indent')
                       imports'
@@ -616,7 +616,7 @@ formatBinder settings@{ indentation } indent' binder = case binder of
     foldMap (formatSourceToken settings indent' blank) negative
       <> formatSourceToken settings indent' blank number
   CST.BinderOp binder1 binders → do
-    formatBinder (settings { indentation = indent' }) prefix binder1 -- [TODO] check
+    formatBinder (settings { indentation = indent' }) prefix binder1
       <> foldMap formatNamedBinder binders
     where
     indentTrick = indent' <> indentation
@@ -699,6 +699,7 @@ formatWhere settings@{ indentation } indent' (CST.Where { expr: expr', bindings:
       <> formatLetBindings letBindings'
     where
     wherePrefix = if precedingEmptyLines where''.leadingComments > 1 then newline else blank
+
     whereSuffix =
       if isPrecededByBlankLines (NE.head letBindings') then
         newline
@@ -1533,7 +1534,7 @@ formatType settings@{ indentation } indent lines t = case t of
       SingleLine → { indented: indent, prefix: space }
   CST.TypeOp typo types →
     formatType settings indent (singleOrMultiline typo) typo
-      <> foldMap formatOp types -- [TODO] Verify
+      <> foldMap formatOp types
     where
     formatOp (op /\ anotherType) =
       formatQualifiedName settings indented prefix op
@@ -1709,6 +1710,7 @@ formatSourceToken settings indent prefix { leadingComments, trailingComments, va
   print = case settings.sourceStyle of
     Nothing → Print.printToken
     Just style → printWithStyle style
+
   printWithStyle style v = case v of
     CST.TokLeftArrow _ → case style of
       CST.ASCII → "<-"
@@ -1821,7 +1823,7 @@ formatWrappedRow settings@{ indentation } indent wrapped@(CST.Wrapped { open, va
     _, SingleLine → blank /\ blank
 
 type Indentation
-  = String -- [TODO] Use Numbers
+  = String
 
 type Indent
   = String

@@ -24,5 +24,6 @@
     "build": "spago bundle-app --main Main --to ./bin/shape.js",
     "test": "spago test"
   },
-  "version": "0.1.0"
+  "version": "0.1.0", 
+  "prettier": {}
 }

@@ -1,53 +1,42 @@
-module Prettier (languages, parsers, printers
-  , FastPath
-  ) where
+module Prettier where
 
 import Prelude
 
-import Data.Function.Uncurried (mkFn3)
-import Data.String.CodeUnits as String
 import Effect (Effect)
-import Effect.Aff.Compat (EffectFn3, mkEffectFn3)
-import Format (format)
-import PureScript.CST (RecoveredParserResult(..), parseModule)
-import PureScript.CST.Types as CST
-import Settings (defaultSettings)
+import Record as Record
+import Type.Proxy (Proxy(..))
+import Type.Row.Homogeneous (class Homogeneous)
+import Unsafe.Coerce (unsafeCoerce)
 
--- | https://github.com/github/linguist/blob/master/lib/linguist/languages.yml#L4505-L4514
-languages =  [
-  {
-    name: "PureScript",
-    parsers: ["purescript"],
-    since: "1.0.0", -- ??
-    extensions: [".purs"],
-    tmScope: "source.purescript",
-    aceMode: "haskell",
-    linguistLanguageId: 302,
-    vscodeLanguageIds: ["purescript"]
-  }
-]
+foreign import data PrettierPluginOptions :: Row Type -> Type
 
-parsers = {
-  purescript: {
-    parse: mkFn3 parse,
-    astFormat: "purescript-cst",
-    locStart: _.start,
-    locEnd: _.end
-  }
+mkPrettierPluginOptions :: forall r. Homogeneous r PrettierOption => { |r } -> PrettierPluginOptions r
+mkPrettierPluginOptions = unsafeCoerce
+
+choiceOption :: forall a.
+  { choices :: Array { value :: a, description :: String }
+  , category :: PrettierOptionCategory
+  , default :: a
+  , description :: String
+  } -> PrettierOption
+choiceOption = unsafeCoerce <<< Record.insert (Proxy :: Proxy "type") "choice" 
+
+foreign import data PrettierOption :: Type
+
+foreign import data PrettierOptionCategory :: Type
+
+globalCategory :: PrettierOptionCategory
+globalCategory = unsafeCoerce "Global"
+
+defaultOptions :: Record (DefaultOptions ())
+defaultOptions = {
+  tabWidth: 2
 }
 
-parse :: forall t34 t37.  String -> t34 -> t37 -> PSPrettierNode
-parse text parsers options = do
-  let parsed = parseModule text
-  { ast_type: "purescript-cst"
-  , body: parsed
-  , end: String.length text
-  , source: text
-  , start: 0
-  } 
-  where
-  settings = optionsToSettings options
-  optionsToSettings _ = defaultSettings
+type DefaultOptions r = (tabWidth :: Int | r)
+
+type PureScriptOptions :: forall k. k -> Row k -> Row k
+type PureScriptOptions a r = (symbolStyle :: a | r)
 
 foreign import nodeFromPath :: forall a. FastPath -> Effect (PrettierNode a)
 
@@ -60,28 +49,3 @@ type PrettierNode a =
   , start :: Int
   , source :: String
   }
-
-type PSPrettierNode = PrettierNode (RecoveredParserResult CST.Module)
-
-printPureScript :: forall x. FastPath -> x -> {} -> Effect String
-printPureScript (path :: FastPath) _ options = do
-  node :: PSPrettierNode <- nodeFromPath path
-  pure case node.ast_type of
-    "purescript-cst" -> case node.body of
-      ParseSucceeded m -> format settings m
-      _ -> node.source
-    _ -> 
-      node.source
-  where
-  settings = optionsToSettings options
-  optionsToSettings _ = defaultSettings
-
-printers :: forall t38.
-  { "purescript-cst" :: { print :: EffectFn3 FastPath t38 (Record ()) String
-                        }
-  }
-printers = {
-  "purescript-cst": {
-    print: mkEffectFn3 printPureScript
-  }
-}
