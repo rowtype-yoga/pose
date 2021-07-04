@@ -17,3 +17,5 @@ instance quxCorGarIntBool :: Qux
                              Cor (Gar
           Int Bool) where
   qux = true
+
+instance Ord Baz

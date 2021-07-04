@@ -71,7 +71,6 @@ formatModule settings (CST.Module { header, body }) =
   formatModuleHeader settings header
     <> formatModuleBody settings body
 
--- [FIXME] This prints as-is, does not format anything
 formatModuleHeader :: Settings -> CST.ModuleHeader Void -> String
 formatModuleHeader settings (CST.ModuleHeader header) =
   formatSourceToken settings blank blank header.keyword
@@ -295,7 +294,7 @@ formatDeclarations ::
   Settings ->
   Array (CST.Declaration Void) ->
   String
-formatDeclarations settings@{ indentation } = foldMap formatOne
+formatDeclarations settings = foldMap formatOne
   where
   formatOne declaration = newline <> formatDeclaration settings blank declaration
 
@@ -311,7 +310,7 @@ formatDeclaration settings@{ indentation } indent declaration = case declaration
         <> formatSourceToken settings indented blank equals
         <> formatSeparated
             settings
-            (singleOrMultiline declaration)
+            MultipleLines
             indented
             blank
             (formatDataConstructor settings indented)
@@ -1405,7 +1404,10 @@ formatDataConstructor settings@{ indentation } indent constructor@(CST.DataCtor 
       let
         indented = indent <> indentation
       { indented, prefix: newline <> indented }
-    SingleLine -> { indented: indent, prefix: space }
+    SingleLine -> 
+      { indented: indent
+      , prefix: space 
+      }
 
   formatField typo = prefix <> formatType settings indented lines typo
 
