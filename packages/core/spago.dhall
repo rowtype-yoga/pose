@@ -31,6 +31,7 @@ to generate this file without the comments in this block.
   , "node-fs-aff"
   , "node-path"
   , "nullable"
+  , "partial"
   , "prelude"
   , "psci-support"
   , "simple-json"

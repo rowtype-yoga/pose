@@ -5,6 +5,13 @@ foo = x
   x = y
   y = 1
 
+funk = x
+
+  where
+  x = y
+
+  y = 1
+
 girl = x
   where
   x = y
@@ -16,4 +23,5 @@ boy = x
 
   x = y
 
+  -- breaks
   y = 1

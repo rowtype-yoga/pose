@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "A prettier plugin that formats PureScript code using shape",
   "main": "index.js",
-  "files": ["index.js"],
+  "files": [
+    "index.js"
+  ],
   "directory": "packages/prettier-plugin-purescript",
   "directories": {
     "test": "test"
@@ -21,5 +23,8 @@
   "bugs": {
     "url": "https://github.com/i-am-the-slime/shape/issues"
   },
-  "homepage": "https://github.com/i-am-the-slime/shape#readme"
+  "homepage": "https://github.com/i-am-the-slime/shape#readme",
+  "devDependencies": {
+    "prettier": "^2.3.2"
+  }
 }

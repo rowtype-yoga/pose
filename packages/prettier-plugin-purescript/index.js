@@ -429,6 +429,18 @@ var PS = {};
   };
 
   //------------------------------------------------------------------------------
+  // Non-indexed reads -----------------------------------------------------------
+  //------------------------------------------------------------------------------
+
+  exports.unconsImpl = function (empty) {
+    return function (next) {
+      return function (xs) {
+        return xs.length === 0 ? empty({}) : next(xs[0])(xs.slice(1));
+      };
+    };
+  };
+
+  //------------------------------------------------------------------------------
   // Indexed operations ----------------------------------------------------------
   //------------------------------------------------------------------------------
 
@@ -841,6 +853,11 @@ var PS = {};
   var unsafeIndex = function (dictPartial) {
       return $foreign.unsafeIndexImpl;
   };
+  var tail = $foreign.unconsImpl(Data_Function["const"](Data_Maybe.Nothing.value))(function (v) {
+      return function (xs) {
+          return new Data_Maybe.Just(xs);
+      };
+  });
   var snoc = function (xs) {
       return function (x) {
           return Data_Array_ST.withArray(Data_Array_ST.push(x))(xs)();
@@ -892,6 +909,60 @@ var PS = {};
   var last = function (xs) {
       return index(xs)($foreign.length(xs) - 1 | 0);
   };
+  var span = function (p) {
+      return function (arr) {
+          var go = function ($copy_i) {
+              var $tco_done = false;
+              var $tco_result;
+              function $tco_loop(i) {
+                  var v = index(arr)(i);
+                  if (v instanceof Data_Maybe.Just) {
+                      var $74 = p(v.value0);
+                      if ($74) {
+                          $copy_i = i + 1 | 0;
+                          return;
+                      };
+                      $tco_done = true;
+                      return new Data_Maybe.Just(i);
+                  };
+                  if (v instanceof Data_Maybe.Nothing) {
+                      $tco_done = true;
+                      return Data_Maybe.Nothing.value;
+                  };
+                  throw new Error("Failed pattern match at Data.Array (line 966, column 5 - line 968, column 25): " + [ v.constructor.name ]);
+              };
+              while (!$tco_done) {
+                  $tco_result = $tco_loop($copy_i);
+              };
+              return $tco_result;
+          };
+          var breakIndex = go(0);
+          if (breakIndex instanceof Data_Maybe.Just && breakIndex.value0 === 0) {
+              return {
+                  init: [  ],
+                  rest: arr
+              };
+          };
+          if (breakIndex instanceof Data_Maybe.Just) {
+              return {
+                  init: $foreign.slice(0)(breakIndex.value0)(arr),
+                  rest: $foreign.slice(breakIndex.value0)($foreign.length(arr))(arr)
+              };
+          };
+          if (breakIndex instanceof Data_Maybe.Nothing) {
+              return {
+                  init: arr,
+                  rest: [  ]
+              };
+          };
+          throw new Error("Failed pattern match at Data.Array (line 953, column 3 - line 959, column 30): " + [ breakIndex.constructor.name ]);
+      };
+  };
+  var takeWhile = function (p) {
+      return function (xs) {
+          return (span(p)(xs)).init;
+      };
+  };
   var head = function (xs) {
       return index(xs)(0);
   };
@@ -915,9 +986,11 @@ var PS = {};
   exports["snoc"] = snoc;
   exports["head"] = head;
   exports["last"] = last;
+  exports["tail"] = tail;
   exports["init"] = init;
   exports["intersperse"] = intersperse;
   exports["catMaybes"] = catMaybes;
+  exports["takeWhile"] = takeWhile;
   exports["zip"] = zip;
   exports["length"] = $foreign.length;
 })(PS);
@@ -1028,6 +1101,7 @@ var PS = {};
           };
       };
   };
+  exports["Monoid"] = Monoid;
   exports["mempty"] = mempty;
   exports["monoidString"] = monoidString;
   exports["monoidRecord"] = monoidRecord;
@@ -1237,6 +1311,21 @@ var PS = {};
   var toArray = function (v) {
       return v;
   };
+  var zip = function (xs) {
+      return function (ys) {
+          return unsafeFromArray(Data_Array.zip(toArray(xs))(toArray(ys)));
+      };
+  };
+  var snoc$prime = function (xs) {
+      return function (x) {
+          return unsafeFromArray(Data_Array.snoc(xs)(x));
+      };
+  };
+  var snoc = function (xs) {
+      return function (x) {
+          return unsafeFromArray(Data_Array.snoc(toArray(xs))(x));
+      };
+  };
   var singleton = function ($60) {
       return unsafeFromArray(Data_Array.singleton($60));
   };
@@ -1262,7 +1351,8 @@ var PS = {};
   };
   var head = adaptMaybe(Data_Array.head);
   var init = adaptMaybe(Data_Array.init);
-  var last = adaptMaybe(Data_Array.last);    
+  var last = adaptMaybe(Data_Array.last);
+  var tail = adaptMaybe(Data_Array.tail);    
   var adaptAny = function (f) {
       return function ($78) {
           return f(toArray($78));
@@ -1285,10 +1375,13 @@ var PS = {};
   exports["toArray"] = toArray;
   exports["singleton"] = singleton;
   exports["cons'"] = cons$prime;
+  exports["snoc'"] = snoc$prime;
   exports["head"] = head;
   exports["last"] = last;
+  exports["tail"] = tail;
   exports["init"] = init;
   exports["intersperse"] = intersperse;
+  exports["zip"] = zip;
 })(PS);
 (function(exports) {
   "use strict";
@@ -1576,12 +1669,16 @@ var PS = {};
       this.mul = mul;
       this.one = one;
       this.zero = zero;
+  };
+  var zero = function (dict) {
+      return dict.zero;
   };                                                                            
   var semiringInt = new Semiring($foreign.intAdd, $foreign.intMul, 1, 0);
   var add = function (dict) {
       return dict.add;
   };
   exports["add"] = add;
+  exports["zero"] = zero;
   exports["semiringInt"] = semiringInt;
 })(PS);
 (function($PS) {
@@ -2308,6 +2405,32 @@ var PS = {};
 (function($PS) {
   // Generated by purs version 0.14.2
   "use strict";
+  $PS["Data.Monoid.Additive"] = $PS["Data.Monoid.Additive"] || {};
+  var exports = $PS["Data.Monoid.Additive"];
+  var Data_Monoid = $PS["Data.Monoid"];
+  var Data_Semigroup = $PS["Data.Semigroup"];
+  var Data_Semiring = $PS["Data.Semiring"];        
+  var Additive = function (x) {
+      return x;
+  };
+  var semigroupAdditive = function (dictSemiring) {
+      return new Data_Semigroup.Semigroup(function (v) {
+          return function (v1) {
+              return Data_Semiring.add(dictSemiring)(v)(v1);
+          };
+      });
+  };
+  var monoidAdditive = function (dictSemiring) {
+      return new Data_Monoid.Monoid(function () {
+          return semigroupAdditive(dictSemiring);
+      }, Data_Semiring.zero(dictSemiring));
+  };
+  exports["Additive"] = Additive;
+  exports["monoidAdditive"] = monoidAdditive;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.2
+  "use strict";
   $PS["Safe.Coerce"] = $PS["Safe.Coerce"] || {};
   var exports = $PS["Safe.Coerce"];
   var Unsafe_Coerce = $PS["Unsafe.Coerce"];                
@@ -2322,10 +2445,25 @@ var PS = {};
   $PS["Data.Newtype"] = $PS["Data.Newtype"] || {};
   var exports = $PS["Data.Newtype"];
   var Safe_Coerce = $PS["Safe.Coerce"];
+  var wrap = function (dictNewtype) {
+      return Safe_Coerce.coerce();
+  };
   var unwrap = function (dictNewtype) {
       return Safe_Coerce.coerce();
   };
+  var ala = function (dictCoercible) {
+      return function (dictNewtype) {
+          return function (dictNewtype1) {
+              return function (v) {
+                  return function (f) {
+                      return Safe_Coerce.coerce()(f(wrap()));
+                  };
+              };
+          };
+      };
+  };
   exports["unwrap"] = unwrap;
+  exports["ala"] = ala;
 })(PS);
 (function(exports) {
   /* globals exports */
@@ -5041,16 +5179,587 @@ var PS = {};
 (function($PS) {
   // Generated by purs version 0.14.2
   "use strict";
+  $PS["PureScript.CST.Range.TokenList"] = $PS["PureScript.CST.Range.TokenList"] || {};
+  var exports = $PS["PureScript.CST.Range.TokenList"];
+  var Control_Lazy = $PS["Control.Lazy"];
+  var Data_Maybe = $PS["Data.Maybe"];
+  var Data_Monoid = $PS["Data.Monoid"];
+  var Data_Semigroup = $PS["Data.Semigroup"];
+  var Data_Unit = $PS["Data.Unit"];                
+  var TokenEmpty = (function () {
+      function TokenEmpty() {
+
+      };
+      TokenEmpty.value = new TokenEmpty();
+      return TokenEmpty;
+  })();
+  var TokenCons = (function () {
+      function TokenCons(value0, value1) {
+          this.value0 = value0;
+          this.value1 = value1;
+      };
+      TokenCons.create = function (value0) {
+          return function (value1) {
+              return new TokenCons(value0, value1);
+          };
+      };
+      return TokenCons;
+  })();
+  var TokenWrap = (function () {
+      function TokenWrap(value0, value1, value2) {
+          this.value0 = value0;
+          this.value1 = value1;
+          this.value2 = value2;
+      };
+      TokenWrap.create = function (value0) {
+          return function (value1) {
+              return function (value2) {
+                  return new TokenWrap(value0, value1, value2);
+              };
+          };
+      };
+      return TokenWrap;
+  })();
+  var TokenAppend = (function () {
+      function TokenAppend(value0, value1) {
+          this.value0 = value0;
+          this.value1 = value1;
+      };
+      TokenAppend.create = function (value0) {
+          return function (value1) {
+              return new TokenAppend(value0, value1);
+          };
+      };
+      return TokenAppend;
+  })();
+  var TokenDefer = (function () {
+      function TokenDefer(value0) {
+          this.value0 = value0;
+      };
+      TokenDefer.create = function (value0) {
+          return new TokenDefer(value0);
+      };
+      return TokenDefer;
+  })();
+  var TokenArray = (function () {
+      function TokenArray(value0, value1, value2) {
+          this.value0 = value0;
+          this.value1 = value1;
+          this.value2 = value2;
+      };
+      TokenArray.create = function (value0) {
+          return function (value1) {
+              return function (value2) {
+                  return new TokenArray(value0, value1, value2);
+              };
+          };
+      };
+      return TokenArray;
+  })();
+  var wrap = TokenWrap.create;
+  var singleton = function (a) {
+      return new TokenCons(a, TokenEmpty.value);
+  };
+  var semigroupTokenList = new Data_Semigroup.Semigroup(function (v) {
+      return function (v1) {
+          if (v1 instanceof TokenEmpty) {
+              return v;
+          };
+          if (v instanceof TokenEmpty) {
+              return v1;
+          };
+          return new TokenAppend(v, v1);
+      };
+  });
+  var monoidTokenList = new Data_Monoid.Monoid(function () {
+      return semigroupTokenList;
+  }, TokenEmpty.value);
+  var lazyTokenList = new Control_Lazy.Lazy(TokenDefer.create);
+  var head = function ($copy_v) {
+      var $tco_done = false;
+      var $tco_result;
+      function $tco_loop(v) {
+          if (v instanceof TokenEmpty) {
+              $tco_done = true;
+              return Data_Maybe.Nothing.value;
+          };
+          if (v instanceof TokenCons) {
+              $tco_done = true;
+              return new Data_Maybe.Just(v.value0);
+          };
+          if (v instanceof TokenDefer) {
+              $copy_v = v.value0(Data_Unit.unit);
+              return;
+          };
+          if (v instanceof TokenWrap) {
+              $tco_done = true;
+              return new Data_Maybe.Just(v.value0);
+          };
+          if (v instanceof TokenAppend) {
+              $copy_v = v.value0;
+              return;
+          };
+          if (v instanceof TokenArray) {
+              $tco_done = true;
+              return new Data_Maybe.Just(v["value2"][v.value0]);
+          };
+          throw new Error("Failed pattern match at PureScript.CST.Range.TokenList (line 64, column 8 - line 70, column 67): " + [ v.constructor.name ]);
+      };
+      while (!$tco_done) {
+          $tco_result = $tco_loop($copy_v);
+      };
+      return $tco_result;
+  };
+  var cons = TokenCons.create;
+  exports["singleton"] = singleton;
+  exports["cons"] = cons;
+  exports["wrap"] = wrap;
+  exports["head"] = head;
+  exports["lazyTokenList"] = lazyTokenList;
+  exports["semigroupTokenList"] = semigroupTokenList;
+  exports["monoidTokenList"] = monoidTokenList;
+})(PS);
+(function($PS) {
+  // Generated by purs version 0.14.2
+  "use strict";
   $PS["PureScript.CST.Range"] = $PS["PureScript.CST.Range"] || {};
   var exports = $PS["PureScript.CST.Range"];
+  var Control_Lazy = $PS["Control.Lazy"];
   var Data_Array = $PS["Data.Array"];
   var Data_Array_NonEmpty = $PS["Data.Array.NonEmpty"];
+  var Data_Array_NonEmpty_Internal = $PS["Data.Array.NonEmpty.Internal"];
+  var Data_Foldable = $PS["Data.Foldable"];
   var Data_Maybe = $PS["Data.Maybe"];
+  var Data_Semigroup = $PS["Data.Semigroup"];
   var Data_Tuple = $PS["Data.Tuple"];
   var Data_Void = $PS["Data.Void"];
-  var PureScript_CST_Types = $PS["PureScript.CST.Types"];
+  var PureScript_CST_Range_TokenList = $PS["PureScript.CST.Range.TokenList"];
+  var PureScript_CST_Types = $PS["PureScript.CST.Types"];                
+  var TokensOf = function (tokensOf) {
+      this.tokensOf = tokensOf;
+  };
   var RangeOf = function (rangeOf) {
       this.rangeOf = rangeOf;
+  };
+  var tokensOfVoid = new TokensOf(Data_Void.absurd);
+  var tokensOfQualifiedName = new TokensOf(function (v) {
+      return PureScript_CST_Range_TokenList.singleton(v.token);
+  });
+  var tokensOfName = new TokensOf(function (v) {
+      return PureScript_CST_Range_TokenList.singleton(v.token);
+  });
+  var tokensOf = function (dict) {
+      return dict.tokensOf;
+  };
+  var tokensOfArray = function (dictTokensOf) {
+      return new TokensOf(Data_Foldable.foldMap(Data_Foldable.foldableArray)(PureScript_CST_Range_TokenList.monoidTokenList)(function (a) {
+          return Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v) {
+              return tokensOf(dictTokensOf)(a);
+          });
+      }));
+  }; 
+  var tokensOfLabeled = function (dictTokensOf) {
+      return function (dictTokensOf1) {
+          return new TokensOf(function (v) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(dictTokensOf)(v.label))(Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v.separator))(tokensOf(dictTokensOf1)(v.value)));
+          });
+      };
+  };
+  var tokensOfMaybe = function (dictTokensOf) {
+      return new TokensOf(Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(PureScript_CST_Range_TokenList.monoidTokenList)(tokensOf(dictTokensOf)));
+  };
+  var tokensOfNonEmptyArray = function (dictTokensOf) {
+      return new TokensOf(Data_Foldable.foldMap(Data_Array_NonEmpty_Internal.foldableNonEmptyArray)(PureScript_CST_Range_TokenList.monoidTokenList)(function (a) {
+          return Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v) {
+              return tokensOf(dictTokensOf)(a);
+          });
+      }));
+  }; 
+  var tokensOfRecordLabeled = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          if (v instanceof PureScript_CST_Types.RecordPun) {
+              return tokensOf(tokensOfName)(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.RecordField) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfName)(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return PureScript_CST_Range_TokenList.cons(v.value1)(tokensOf(dictTokensOf)(v.value2));
+              }));
+          };
+          throw new Error("Failed pattern match at PureScript.CST.Range (line 988, column 14 - line 992, column 52): " + [ v.constructor.name ]);
+      });
+  };
+  var tokensOfSeparated = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(dictTokensOf)(v.head))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+              return Data_Foldable.foldMap(Data_Foldable.foldableArray)(PureScript_CST_Range_TokenList.monoidTokenList)(function (v2) {
+                  return PureScript_CST_Range_TokenList.cons(v2.value0)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v3) {
+                      return tokensOf(dictTokensOf)(v2.value1);
+                  }));
+              })(v.tail);
+          }));
+      });
+  };
+  var tokensOfTuple = function (dictTokensOf) {
+      return function (dictTokensOf1) {
+          return new TokensOf(function (v) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(dictTokensOf)(v.value0))(tokensOf(dictTokensOf1)(v.value1));
+          });
+      };
+  };
+  var tokensOfWrapped = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          return PureScript_CST_Range_TokenList.wrap(v.open)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+              return tokensOf(dictTokensOf)(v.value);
+          }))(v.close);
+      });
+  };
+  var tokensOfTypeVarBinding = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          if (v instanceof PureScript_CST_Types.TypeVarKinded) {
+              return tokensOf(tokensOfWrapped(tokensOfLabeled(tokensOfName)(tokensOfType(dictTokensOf))))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.TypeVarName) {
+              return tokensOf(tokensOfName)(v.value0);
+          };
+          throw new Error("Failed pattern match at PureScript.CST.Range (line 247, column 14 - line 251, column 17): " + [ v.constructor.name ]);
+      });
+  };
+  var tokensOfType = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          if (v instanceof PureScript_CST_Types.TypeVar) {
+              return tokensOf(tokensOfName)(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.TypeConstructor) {
+              return tokensOf(tokensOfQualifiedName)(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.TypeWildcard) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.TypeHole) {
+              return tokensOf(tokensOfName)(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.TypeString) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.TypeRow) {
+              return tokensOf(tokensOfWrapped(tokensOfRow(dictTokensOf)))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.TypeRecord) {
+              return tokensOf(tokensOfWrapped(tokensOfRow(dictTokensOf)))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.TypeForall) {
+              return PureScript_CST_Range_TokenList.cons(v.value0)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfNonEmptyArray(tokensOfTypeVarBinding(dictTokensOf)))(v.value1))(Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v.value2))(tokensOf(tokensOfType(dictTokensOf))(v.value3)));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.TypeKinded) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfType(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v.value1))(tokensOf(tokensOfType(dictTokensOf))(v.value2));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.TypeApp) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfType(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return tokensOf(tokensOfNonEmptyArray(tokensOfType(dictTokensOf)))(v.value1);
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.TypeOp) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfType(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return Data_Foldable.foldMap(Data_Array_NonEmpty_Internal.foldableNonEmptyArray)(PureScript_CST_Range_TokenList.monoidTokenList)(function (v2) {
+                      return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfQualifiedName)(v2.value0))(tokensOf(tokensOfType(dictTokensOf))(v2.value1));
+                  })(v.value1);
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.TypeOpName) {
+              return tokensOf(tokensOfQualifiedName)(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.TypeArrow) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfType(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v.value1))(tokensOf(tokensOfType(dictTokensOf))(v.value2));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.TypeArrowName) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.TypeConstrained) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfType(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v.value1))(tokensOf(tokensOfType(dictTokensOf))(v.value2));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.TypeParens) {
+              return tokensOf(tokensOfWrapped(tokensOfType(dictTokensOf)))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.TypeUnaryRow) {
+              return PureScript_CST_Range_TokenList.cons(v.value0)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return tokensOf(tokensOfType(dictTokensOf))(v.value1);
+              }));
+          };
+          if (v instanceof PureScript_CST_Types["TypeError"]) {
+              return tokensOf(dictTokensOf)(v.value0);
+          };
+          throw new Error("Failed pattern match at PureScript.CST.Range (line 188, column 14 - line 232, column 17): " + [ v.constructor.name ]);
+      });
+  };
+  var tokensOfRow = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(PureScript_CST_Range_TokenList.monoidTokenList)(tokensOf(tokensOfSeparated(tokensOfLabeled(tokensOfName)(tokensOfType(dictTokensOf)))))(v.labels))(Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(PureScript_CST_Range_TokenList.monoidTokenList)(function (v1) {
+              return PureScript_CST_Range_TokenList.cons(v1.value0)(tokensOf(tokensOfType(dictTokensOf))(v1.value1));
+          })(v.tail));
+      });
+  };
+  var tokensOfBinder = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          if (v instanceof PureScript_CST_Types.BinderWildcard) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.BinderVar) {
+              return tokensOf(tokensOfName)(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.BinderNamed) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfName)(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return PureScript_CST_Range_TokenList.cons(v.value1)(tokensOf(tokensOfBinder(dictTokensOf))(v.value2));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.BinderConstructor) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfQualifiedName)(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return tokensOf(tokensOfArray(tokensOfBinder(dictTokensOf)))(v.value1);
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.BinderBoolean) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.BinderChar) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.BinderString) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.BinderInt) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(PureScript_CST_Range_TokenList.monoidTokenList)(PureScript_CST_Range_TokenList.singleton)(v.value0))(PureScript_CST_Range_TokenList.singleton(v.value1));
+          };
+          if (v instanceof PureScript_CST_Types.BinderNumber) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(PureScript_CST_Range_TokenList.monoidTokenList)(PureScript_CST_Range_TokenList.singleton)(v.value0))(PureScript_CST_Range_TokenList.singleton(v.value1));
+          };
+          if (v instanceof PureScript_CST_Types.BinderArray) {
+              return tokensOf(tokensOfWrapped(tokensOfMaybe(tokensOfSeparated(tokensOfBinder(dictTokensOf)))))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.BinderRecord) {
+              return tokensOf(tokensOfWrapped(tokensOfMaybe(tokensOfSeparated(tokensOfRecordLabeled(tokensOfBinder(dictTokensOf))))))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.BinderParens) {
+              return tokensOf(tokensOfWrapped(tokensOfBinder(dictTokensOf)))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.BinderTyped) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfBinder(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return PureScript_CST_Range_TokenList.cons(v.value1)(tokensOf(tokensOfType(dictTokensOf))(v.value2));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.BinderOp) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfBinder(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return tokensOf(tokensOfNonEmptyArray(tokensOfTuple(tokensOfQualifiedName)(tokensOfBinder(dictTokensOf))))(v.value1);
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.BinderError) {
+              return tokensOf(dictTokensOf)(v.value0);
+          };
+          throw new Error("Failed pattern match at PureScript.CST.Range (line 955, column 14 - line 985, column 17): " + [ v.constructor.name ]);
+      });
+  };
+  var tokensOfWhere = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfExpr(dictTokensOf))(v.expr))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+              return Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(PureScript_CST_Range_TokenList.monoidTokenList)(function (v2) {
+                  return PureScript_CST_Range_TokenList.cons(v2.value0)(tokensOf(tokensOfNonEmptyArray(tokensOfLetBinding(dictTokensOf)))(v2.value1));
+              })(v.bindings);
+          }));
+      });
+  };
+  var tokensOfRecordUpdate = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          if (v instanceof PureScript_CST_Types.RecordUpdateLeaf) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfName)(v.value0))(Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v.value1))(tokensOf(tokensOfExpr(dictTokensOf))(v.value2)));
+          };
+          if (v instanceof PureScript_CST_Types.RecordUpdateBranch) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfName)(v.value0))(tokensOf(tokensOfWrapped(tokensOfSeparated(tokensOfRecordUpdate(dictTokensOf))))(v.value1));
+          };
+          throw new Error("Failed pattern match at PureScript.CST.Range (line 839, column 14 - line 843, column 32): " + [ v.constructor.name ]);
+      });
+  };
+  var tokensOfPatternGuard = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(PureScript_CST_Range_TokenList.monoidTokenList)(function (v1) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfBinder(dictTokensOf))(v1.value0))(PureScript_CST_Range_TokenList.singleton(v1.value1));
+          })(v.binder))(tokensOf(tokensOfExpr(dictTokensOf))(v.expr));
+      });
+  };
+  var tokensOfLetBinding = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          if (v instanceof PureScript_CST_Types.LetBindingSignature) {
+              return tokensOf(tokensOfLabeled(tokensOfName)(tokensOfType(dictTokensOf)))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.LetBindingName) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfName)(v.value0.name))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfArray(tokensOfBinder(dictTokensOf)))(v.value0.binders))(tokensOf(tokensOfGuarded(dictTokensOf))(v.value0.guarded));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.LetBindingPattern) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfBinder(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return PureScript_CST_Range_TokenList.cons(v.value1)(tokensOf(tokensOfWhere(dictTokensOf))(v.value2));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.LetBindingError) {
+              return tokensOf(dictTokensOf)(v.value0);
+          };
+          throw new Error("Failed pattern match at PureScript.CST.Range (line 887, column 14 - line 895, column 17): " + [ v.constructor.name ]);
+      });
+  };
+  var tokensOfGuardedExpr = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          return PureScript_CST_Range_TokenList.cons(v.bar)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfSeparated(tokensOfPatternGuard(dictTokensOf)))(v.patterns))(Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v.separator))(tokensOf(tokensOfWhere(dictTokensOf))(v.where)));
+          }));
+      });
+  };
+  var tokensOfGuarded = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          if (v instanceof PureScript_CST_Types.Unconditional) {
+              return PureScript_CST_Range_TokenList.cons(v.value0)(tokensOf(tokensOfWhere(dictTokensOf))(v.value1));
+          };
+          if (v instanceof PureScript_CST_Types.Guarded) {
+              return tokensOf(tokensOfNonEmptyArray(tokensOfGuardedExpr(dictTokensOf)))(v.value0);
+          };
+          throw new Error("Failed pattern match at PureScript.CST.Range (line 599, column 14 - line 603, column 18): " + [ v.constructor.name ]);
+      });
+  };
+  var tokensOfExpr = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          if (v instanceof PureScript_CST_Types.ExprHole) {
+              return tokensOf(tokensOfName)(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprSection) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprIdent) {
+              return tokensOf(tokensOfQualifiedName)(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprConstructor) {
+              return tokensOf(tokensOfQualifiedName)(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprBoolean) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprChar) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprString) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprInt) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprNumber) {
+              return PureScript_CST_Range_TokenList.singleton(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprArray) {
+              return tokensOf(tokensOfWrapped(tokensOfMaybe(tokensOfSeparated(tokensOfExpr(dictTokensOf)))))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprRecord) {
+              return tokensOf(tokensOfWrapped(tokensOfMaybe(tokensOfSeparated(tokensOfRecordLabeled(tokensOfExpr(dictTokensOf))))))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprParens) {
+              return tokensOf(tokensOfWrapped(tokensOfExpr(dictTokensOf)))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprTyped) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfExpr(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return PureScript_CST_Range_TokenList.cons(v.value1)(tokensOf(tokensOfType(dictTokensOf))(v.value2));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprInfix) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfExpr(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return tokensOf(tokensOfNonEmptyArray(tokensOfTuple(tokensOfWrapped(tokensOfExpr(dictTokensOf)))(tokensOfExpr(dictTokensOf))))(v.value1);
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprOp) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfExpr(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return tokensOf(tokensOfNonEmptyArray(tokensOfTuple(tokensOfQualifiedName)(tokensOfExpr(dictTokensOf))))(v.value1);
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprOpName) {
+              return tokensOf(tokensOfQualifiedName)(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.ExprNegate) {
+              return PureScript_CST_Range_TokenList.cons(v.value0)(tokensOf(tokensOfExpr(dictTokensOf))(v.value1));
+          };
+          if (v instanceof PureScript_CST_Types.ExprRecordAccessor) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfExpr(dictTokensOf))(v.value0.expr))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return PureScript_CST_Range_TokenList.cons(v.value0.dot)(tokensOf(tokensOfSeparated(tokensOfName))(v.value0.path));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprRecordUpdate) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfExpr(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return tokensOf(tokensOfWrapped(tokensOfSeparated(tokensOfRecordUpdate(dictTokensOf))))(v.value1);
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprApp) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfExpr(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return tokensOf(tokensOfNonEmptyArray(tokensOfExpr(dictTokensOf)))(v.value1);
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprLambda) {
+              return PureScript_CST_Range_TokenList.cons(v.value0.symbol)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfNonEmptyArray(tokensOfBinder(dictTokensOf)))(v.value0.binders))(Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v.value0.arrow))(tokensOf(tokensOfExpr(dictTokensOf))(v.value0.body)));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprIf) {
+              return PureScript_CST_Range_TokenList.cons(v.value0.keyword)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfExpr(dictTokensOf))(v.value0.cond))(Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v.value0.then))(Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfExpr(dictTokensOf))(v["value0"]["true"]))(Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v["value0"]["else"]))(tokensOf(tokensOfExpr(dictTokensOf))(v["value0"]["false"])))));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprCase) {
+              return PureScript_CST_Range_TokenList.cons(v.value0.keyword)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfSeparated(tokensOfExpr(dictTokensOf)))(v.value0.head))(Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v.value0.of))(tokensOf(tokensOfNonEmptyArray(tokensOfTuple(tokensOfSeparated(tokensOfBinder(dictTokensOf)))(tokensOfGuarded(dictTokensOf))))(v.value0.branches)));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprLet) {
+              return PureScript_CST_Range_TokenList.cons(v.value0.keyword)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfNonEmptyArray(tokensOfLetBinding(dictTokensOf)))(v.value0.bindings))(Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v["value0"]["in"]))(tokensOf(tokensOfExpr(dictTokensOf))(v.value0.body)));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprDo) {
+              return PureScript_CST_Range_TokenList.cons(v.value0.keyword)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return tokensOf(tokensOfNonEmptyArray(tokensOfDoStatement(dictTokensOf)))(v.value0.statements);
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprAdo) {
+              return PureScript_CST_Range_TokenList.cons(v.value0.keyword)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfArray(tokensOfDoStatement(dictTokensOf)))(v.value0.statements))(Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(PureScript_CST_Range_TokenList.singleton(v["value0"]["in"]))(tokensOf(tokensOfExpr(dictTokensOf))(v.value0.result)));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.ExprError) {
+              return tokensOf(dictTokensOf)(v.value0);
+          };
+          throw new Error("Failed pattern match at PureScript.CST.Range (line 765, column 14 - line 836, column 17): " + [ v.constructor.name ]);
+      });
+  };
+  var tokensOfDoStatement = function (dictTokensOf) {
+      return new TokensOf(function (v) {
+          if (v instanceof PureScript_CST_Types.DoLet) {
+              return PureScript_CST_Range_TokenList.cons(v.value0)(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return tokensOf(tokensOfNonEmptyArray(tokensOfLetBinding(dictTokensOf)))(v.value1);
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.DoDiscard) {
+              return tokensOf(tokensOfExpr(dictTokensOf))(v.value0);
+          };
+          if (v instanceof PureScript_CST_Types.DoBind) {
+              return Data_Semigroup.append(PureScript_CST_Range_TokenList.semigroupTokenList)(tokensOf(tokensOfBinder(dictTokensOf))(v.value0))(Control_Lazy.defer(PureScript_CST_Range_TokenList.lazyTokenList)(function (v1) {
+                  return PureScript_CST_Range_TokenList.cons(v.value1)(tokensOf(tokensOfExpr(dictTokensOf))(v.value2));
+              }));
+          };
+          if (v instanceof PureScript_CST_Types.DoError) {
+              return tokensOf(dictTokensOf)(v.value0);
+          };
+          throw new Error("Failed pattern match at PureScript.CST.Range (line 861, column 14 - line 869, column 17): " + [ v.constructor.name ]);
+      });
   };
   var rangeOfWrapped = new RangeOf(function (v) {
       return {
@@ -5832,7 +6541,9 @@ var PS = {};
       });
   };
   exports["rangeOf"] = rangeOf;
+  exports["tokensOf"] = tokensOf;
   exports["rangeOfVoid"] = rangeOfVoid;
+  exports["tokensOfVoid"] = tokensOfVoid;
   exports["rangeOfName"] = rangeOfName;
   exports["rangeOfQualifiedName"] = rangeOfQualifiedName;
   exports["rangeOfWrapped"] = rangeOfWrapped;
@@ -5848,6 +6559,7 @@ var PS = {};
   exports["rangeOfInstance"] = rangeOfInstance;
   exports["rangeOfExpr"] = rangeOfExpr;
   exports["rangeOfDoStatement"] = rangeOfDoStatement;
+  exports["tokensOfLetBinding"] = tokensOfLetBinding;
   exports["rangeOfBinder"] = rangeOfBinder;
 })(PS);
 (function($PS) {
@@ -5863,12 +6575,17 @@ var PS = {};
   var Data_Functor = $PS["Data.Functor"];
   var Data_Maybe = $PS["Data.Maybe"];
   var Data_Monoid = $PS["Data.Monoid"];
+  var Data_Monoid_Additive = $PS["Data.Monoid.Additive"];
+  var Data_Newtype = $PS["Data.Newtype"];
   var Data_Semigroup = $PS["Data.Semigroup"];
   var Data_Semigroup_Foldable = $PS["Data.Semigroup.Foldable"];
+  var Data_Semiring = $PS["Data.Semiring"];
   var Data_Tuple = $PS["Data.Tuple"];
   var Data_Void = $PS["Data.Void"];
+  var Partial_Unsafe = $PS["Partial.Unsafe"];
   var PureScript_CST_Print = $PS["PureScript.CST.Print"];
   var PureScript_CST_Range = $PS["PureScript.CST.Range"];
+  var PureScript_CST_Range_TokenList = $PS["PureScript.CST.Range.TokenList"];
   var PureScript_CST_Types = $PS["PureScript.CST.Types"];                
   var SingleLine = (function () {
       function SingleLine() {
@@ -5886,8 +6603,8 @@ var PS = {};
   })();
   var space = " ";
   var singleOrMultilineFromRange = function (v) {
-      var $149 = v.start.line === v.end.line;
-      if ($149) {
+      var $153 = v.start.line === v.end.line;
+      if ($153) {
           return SingleLine.value;
       };
       return MultipleLines.value;
@@ -5923,9 +6640,9 @@ var PS = {};
   };
   var rangeOfPatternGuard = function (v) {
       var v1 = Data_Maybe.maybe(PureScript_CST_Range.rangeOf(PureScript_CST_Range.rangeOfExpr(PureScript_CST_Range.rangeOfVoid))(v.expr))((function () {
-          var $1087 = PureScript_CST_Range.rangeOf(PureScript_CST_Range.rangeOfBinder(PureScript_CST_Range.rangeOfVoid));
-          return function ($1088) {
-              return $1087(Data_Tuple.fst($1088));
+          var $1107 = PureScript_CST_Range.rangeOf(PureScript_CST_Range.rangeOfBinder(PureScript_CST_Range.rangeOfVoid));
+          return function ($1108) {
+              return $1107(Data_Tuple.fst($1108));
           };
       })())(v.binder);
       var v2 = PureScript_CST_Range.rangeOf(PureScript_CST_Range.rangeOfExpr(PureScript_CST_Range.rangeOfVoid))(v.expr);
@@ -5943,7 +6660,7 @@ var PS = {};
           if (v2 instanceof Data_Maybe.Just) {
               return PureScript_CST_Range.rangeOf(PureScript_CST_Range.rangeOfType(PureScript_CST_Range.rangeOfVoid))(v2.value0);
           };
-          throw new Error("Failed pattern match at Format (line 37, column 15 - line 39, column 28): " + [ v2.constructor.name ]);
+          throw new Error("Failed pattern match at Format (line 62, column 15 - line 64, column 28): " + [ v2.constructor.name ]);
       })();
       return singleOrMultilineFromRange({
           start: v.keyword.range.start,
@@ -5961,7 +6678,42 @@ var PS = {};
       if (v instanceof PureScript_CST_Types.Line) {
           return Data_Maybe.Nothing.value;
       };
-      throw new Error("Failed pattern match at Format (line 1746, column 17 - line 1749, column 26): " + [ v.constructor.name ]);
+      throw new Error("Failed pattern match at Format (line 1785, column 17 - line 1788, column 26): " + [ v.constructor.name ]);
+  };
+  var commentIsSpaceOrLineFeed = function (v) {
+      if (v instanceof PureScript_CST_Types.Space) {
+          return true;
+      };
+      if (v instanceof PureScript_CST_Types.Line) {
+          return true;
+      };
+      return false;
+  };
+  var precedingEmptyLines = (function () {
+      var toLines = function (v) {
+          if (v instanceof PureScript_CST_Types.Line) {
+              return v.value1;
+          };
+          return 0;
+      };
+      var $1109 = Data_Newtype.ala()()()(Data_Monoid_Additive.Additive)(Data_Foldable.foldMap(Data_Foldable.foldableArray)(Data_Monoid_Additive.monoidAdditive(Data_Semiring.semiringInt)));
+      var $1110 = Data_Functor.map(Data_Functor.functorArray)(toLines);
+      var $1111 = Data_Array.takeWhile(commentIsSpaceOrLineFeed);
+      return function ($1112) {
+          return $1109($1110($1111($1112)));
+      };
+  })();
+  var isPrecededByBlankLines = function (dictTokensOf) {
+      return function (x) {
+          var v = PureScript_CST_Range_TokenList.head(PureScript_CST_Range.tokensOf(dictTokensOf)(x));
+          if (v instanceof Data_Maybe.Just) {
+              return precedingEmptyLines(v.value0.leadingComments) > 1;
+          };
+          if (v instanceof Data_Maybe.Nothing) {
+              return Partial_Unsafe.unsafeCrashWith("Unexpectedly got no tokens");
+          };
+          throw new Error("Failed pattern match at Format (line 35, column 28 - line 37, column 58): " + [ v.constructor.name ]);
+      };
   };
   var blank = "";
   var formatCommentLeading = function (indent) {
@@ -5976,7 +6728,7 @@ var PS = {};
               if (v instanceof PureScript_CST_Types.Space) {
                   return blank;
               };
-              throw new Error("Failed pattern match at Format (line 1703, column 38 - line 1707, column 23): " + [ v.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 1742, column 38 - line 1746, column 23): " + [ v.constructor.name ]);
           };
       };
   };
@@ -5991,7 +6743,7 @@ var PS = {};
           if (comment$prime$prime instanceof PureScript_CST_Types.Space) {
               return blank;
           };
-          throw new Error("Failed pattern match at Format (line 1713, column 42 - line 1716, column 23): " + [ comment$prime$prime.constructor.name ]);
+          throw new Error("Failed pattern match at Format (line 1752, column 42 - line 1755, column 23): " + [ comment$prime$prime.constructor.name ]);
       };
   };
   var formatCommentsLeading = function (indent) {
@@ -6025,7 +6777,7 @@ var PS = {};
                               if (style instanceof PureScript_CST_Types.Unicode) {
                                   return "\u2190";
                               };
-                              throw new Error("Failed pattern match at Format (line 1673, column 9 - line 1675, column 29): " + [ style.constructor.name ]);
+                              throw new Error("Failed pattern match at Format (line 1712, column 9 - line 1714, column 29): " + [ style.constructor.name ]);
                           };
                           if (v1 instanceof PureScript_CST_Types.TokRightArrow) {
                               if (style instanceof PureScript_CST_Types.ASCII) {
@@ -6034,7 +6786,7 @@ var PS = {};
                               if (style instanceof PureScript_CST_Types.Unicode) {
                                   return "\u2192";
                               };
-                              throw new Error("Failed pattern match at Format (line 1677, column 9 - line 1679, column 29): " + [ style.constructor.name ]);
+                              throw new Error("Failed pattern match at Format (line 1716, column 9 - line 1718, column 29): " + [ style.constructor.name ]);
                           };
                           if (v1 instanceof PureScript_CST_Types.TokRightFatArrow) {
                               if (style instanceof PureScript_CST_Types.ASCII) {
@@ -6043,7 +6795,7 @@ var PS = {};
                               if (style instanceof PureScript_CST_Types.Unicode) {
                                   return "\u21d2";
                               };
-                              throw new Error("Failed pattern match at Format (line 1681, column 9 - line 1683, column 29): " + [ style.constructor.name ]);
+                              throw new Error("Failed pattern match at Format (line 1720, column 9 - line 1722, column 29): " + [ style.constructor.name ]);
                           };
                           if (v1 instanceof PureScript_CST_Types.TokDoubleColon) {
                               if (style instanceof PureScript_CST_Types.ASCII) {
@@ -6052,7 +6804,7 @@ var PS = {};
                               if (style instanceof PureScript_CST_Types.Unicode) {
                                   return "\u2237";
                               };
-                              throw new Error("Failed pattern match at Format (line 1685, column 9 - line 1687, column 29): " + [ style.constructor.name ]);
+                              throw new Error("Failed pattern match at Format (line 1724, column 9 - line 1726, column 29): " + [ style.constructor.name ]);
                           };
                           if (v1 instanceof PureScript_CST_Types.TokForall) {
                               if (style instanceof PureScript_CST_Types.ASCII) {
@@ -6061,7 +6813,7 @@ var PS = {};
                               if (style instanceof PureScript_CST_Types.Unicode) {
                                   return "\u2200";
                               };
-                              throw new Error("Failed pattern match at Format (line 1689, column 9 - line 1691, column 29): " + [ style.constructor.name ]);
+                              throw new Error("Failed pattern match at Format (line 1728, column 9 - line 1730, column 29): " + [ style.constructor.name ]);
                           };
                           if (v1 instanceof PureScript_CST_Types.TokSymbolArrow) {
                               if (style instanceof PureScript_CST_Types.ASCII) {
@@ -6070,7 +6822,7 @@ var PS = {};
                               if (style instanceof PureScript_CST_Types.Unicode) {
                                   return "(\u2192)";
                               };
-                              throw new Error("Failed pattern match at Format (line 1693, column 9 - line 1695, column 31): " + [ style.constructor.name ]);
+                              throw new Error("Failed pattern match at Format (line 1732, column 9 - line 1734, column 31): " + [ style.constructor.name ]);
                           };
                           return PureScript_CST_Print.printToken(v1);
                       };
@@ -6082,7 +6834,7 @@ var PS = {};
                       if (settings.sourceStyle instanceof Data_Maybe.Just) {
                           return printWithStyle(settings.sourceStyle.value0);
                       };
-                      throw new Error("Failed pattern match at Format (line 1668, column 13 - line 1670, column 41): " + [ settings.sourceStyle.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1707, column 13 - line 1709, column 41): " + [ settings.sourceStyle.constructor.name ]);
                   })();
                   return formatCommentsLeading(indent)(prefix)(v.leadingComments) + (prefix + (print(v.value) + formatCommentsTrailing(prefix)(v.trailingComments)));
               };
@@ -6110,7 +6862,7 @@ var PS = {};
                                           prefix: space
                                       };
                                   };
-                                  throw new Error("Failed pattern match at Format (line 1547, column 24 - line 1552, column 53): " + [ v3.constructor.name ]);
+                                  throw new Error("Failed pattern match at Format (line 1586, column 24 - line 1591, column 53): " + [ v3.constructor.name ]);
                               })();
                               return formatLabel(v1.label) + (formatSourceToken(v)(v2.indent)(space)(v1.separator) + (v2.prefix + formatValue(v2.indent)(v1.value)));
                           };
@@ -6140,7 +6892,7 @@ var PS = {};
                       return formatName(settings)(indent)(blank)(name) + space;
                   })(v.value0) + (formatSourceToken(settings)(indent)(blank)(v.value1) + Data_Foldable.foldMap(Data_Array_NonEmpty_Internal.foldableNonEmptyArray)(Data_Monoid.monoidString)(formatName(settings)(indent)(space))(v.value2));
               };
-              throw new Error("Failed pattern match at Format (line 1358, column 37 - line 1365, column 62): " + [ v.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 1394, column 37 - line 1401, column 62): " + [ v.constructor.name ]);
           };
       };
   };
@@ -6169,7 +6921,7 @@ var PS = {};
       if (v instanceof Data_Maybe.Just) {
           return newline + (Data_Foldable.fold(Data_Array_NonEmpty_Internal.foldableNonEmptyArray)(Data_Monoid.monoidString)(Data_Array_NonEmpty.intersperse(newline)(v.value0)) + newline);
       };
-      throw new Error("Failed pattern match at Format (line 1741, column 3 - line 1743, column 82): " + [ v.constructor.name ]);
+      throw new Error("Failed pattern match at Format (line 1780, column 3 - line 1782, column 82): " + [ v.constructor.name ]);
   };
   var formatFixityOp = function (settings) {
       return function (indent) {
@@ -6180,7 +6932,7 @@ var PS = {};
               if (fixityOp$prime instanceof PureScript_CST_Types.FixityValue) {
                   return formatQualifiedName(settings)(indent)(blank)(fixityOp$prime.value0) + (formatSourceToken(settings)(indent)(space)(fixityOp$prime.value1) + formatName(settings)(indent)(space)(fixityOp$prime.value2));
               };
-              throw new Error("Failed pattern match at Format (line 454, column 44 - line 463, column 45): " + [ fixityOp$prime.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 478, column 44 - line 487, column 45): " + [ fixityOp$prime.constructor.name ]);
           };
       };
   };
@@ -6208,11 +6960,11 @@ var PS = {};
                               if (v2 instanceof SingleLine) {
                                   return new Data_Tuple.Tuple(indent$prime, space);
                               };
-                              throw new Error("Failed pattern match at Format (line 1042, column 26 - line 1044, column 39): " + [ v2.constructor.name ]);
+                              throw new Error("Failed pattern match at Format (line 1078, column 26 - line 1080, column 39): " + [ v2.constructor.name ]);
                           })();
                           return formatName(v)(indent$prime)(blank)(recordLabeled$prime.value0) + (formatSourceToken(v)(indent$prime)(blank)(recordLabeled$prime.value1) + (v1.value1 + f(v1.value0)(recordLabeled$prime.value2)));
                       };
-                      throw new Error("Failed pattern match at Format (line 1037, column 73 - line 1048, column 20): " + [ recordLabeled$prime.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1073, column 73 - line 1084, column 20): " + [ recordLabeled$prime.constructor.name ]);
                   };
               };
           };
@@ -6231,7 +6983,7 @@ var PS = {};
                               if (lines instanceof SingleLine) {
                                   return blank;
                               };
-                              throw new Error("Failed pattern match at Format (line 1638, column 12 - line 1640, column 24): " + [ lines.constructor.name ]);
+                              throw new Error("Failed pattern match at Format (line 1677, column 12 - line 1679, column 24): " + [ lines.constructor.name ]);
                           })();
                           var go = function (v1) {
                               return prefix + (formatSourceToken(settings)(indent)(blank)(v1.value0) + (prefix$prime + formatValue(v1.value1)));
@@ -6261,7 +7013,7 @@ var PS = {};
                               after: blank
                           };
                       };
-                      throw new Error("Failed pattern match at Format (line 1765, column 23 - line 1767, column 50): " + [ v2.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1804, column 23 - line 1806, column 50): " + [ v2.constructor.name ]);
                   })();
                   return formatSourceToken(settings)(indent)(blank)(v.open) + (v1.before + (formatValue(v.value) + (v1.after + formatSourceToken(settings)(indent)(blank)(v.close))));
               };
@@ -6280,7 +7032,7 @@ var PS = {};
                           if (lines instanceof SingleLine) {
                               return new Data_Tuple.Tuple(space, space);
                           };
-                          throw new Error("Failed pattern match at Format (line 1264, column 21 - line 1266, column 33): " + [ lines.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1300, column 21 - line 1302, column 33): " + [ lines.constructor.name ]);
                       })();
                       var formatOne = function (v1) {
                           return v.value0 + (formatSeparated(settings)(singleOrMultiline(PureScript_CST_Range.rangeOfSeparated(dictRangeOf))(v1))(indent)(space)(formatValue)(v1) + v.value1);
@@ -6307,7 +7059,7 @@ var PS = {};
                                   close: v.close
                               });
                           };
-                          throw new Error("Failed pattern match at Format (line 1240, column 49 - line 1251, column 50): " + [ v.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1276, column 49 - line 1287, column 50): " + [ v.constructor.name ]);
                       };
                   };
               };
@@ -6339,11 +7091,11 @@ var PS = {};
                       if (span instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime, blank);
                       };
-                      throw new Error("Failed pattern match at Format (line 261, column 28 - line 263, column 41): " + [ span.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 285, column 28 - line 287, column 41): " + [ span.constructor.name ]);
                   })();
                   return v1.value1 + formatDelimited(v)(indent$prime)(formatName(v)(v1.value0)(blank))(dataMembers$prime.value0);
               };
-              throw new Error("Failed pattern match at Format (line 256, column 67 - line 269, column 21): " + [ dataMembers$prime.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 280, column 67 - line 293, column 21): " + [ dataMembers$prime.constructor.name ]);
           };
       };
   };
@@ -6372,7 +7124,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime, blank);
                       };
-                      throw new Error("Failed pattern match at Format (line 128, column 26 - line 130, column 39): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 152, column 26 - line 154, column 39): " + [ lines.constructor.name ]);
                   })();
                   return formatName(v)(indent$prime)(blank)(export$prime.value0) + (v1.value1 + Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(Data_Monoid.monoidString)(formatDataMembers(v)(v1.value0))(export$prime.value1));
               };
@@ -6385,7 +7137,7 @@ var PS = {};
               if (export$prime instanceof PureScript_CST_Types.ExportError) {
                   return Data_Void.absurd(export$prime.value0);
               };
-              throw new Error("Failed pattern match at Format (line 112, column 57 - line 139, column 32): " + [ export$prime.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 136, column 57 - line 163, column 32): " + [ export$prime.constructor.name ]);
           };
       };
   };
@@ -6410,7 +7162,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return indent$prime;
                       };
-                      throw new Error("Failed pattern match at Format (line 237, column 16 - line 239, column 30): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 261, column 16 - line 263, column 30): " + [ lines.constructor.name ]);
                   })();
                   return formatName(v)(indent$prime)(blank)(import$prime$prime.value0) + Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(Data_Monoid.monoidString)(formatDataMembers(v)(indent))(import$prime$prime.value1);
               };
@@ -6423,7 +7175,7 @@ var PS = {};
               if (import$prime$prime instanceof PureScript_CST_Types.ImportError) {
                   return Data_Void.absurd(import$prime$prime.value0);
               };
-              throw new Error("Failed pattern match at Format (line 226, column 58 - line 247, column 32): " + [ import$prime$prime.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 250, column 58 - line 271, column 32): " + [ import$prime$prime.constructor.name ]);
           };
       };
   };
@@ -6452,11 +7204,11 @@ var PS = {};
                   if (lines instanceof SingleLine) {
                       return space;
                   };
-                  throw new Error("Failed pattern match at Format (line 94, column 16 - line 96, column 28): " + [ lines.constructor.name ]);
+                  throw new Error("Failed pattern match at Format (line 118, column 16 - line 120, column 28): " + [ lines.constructor.name ]);
               })();
               return prefix + formatDelimitedNonEmpty(PureScript_CST_Range.rangeOfExport(PureScript_CST_Range.rangeOfVoid))(v)(lines)(v.indentation)(formatExport(v)(v.indentation))(exports$prime$prime.value0);
           };
-          throw new Error("Failed pattern match at Format (line 88, column 52 - line 105, column 39): " + [ exports$prime$prime.constructor.name ]);
+          throw new Error("Failed pattern match at Format (line 112, column 52 - line 129, column 39): " + [ exports$prime$prime.constructor.name ]);
       };
   };
   var formatImportDeclaration = function (v) {
@@ -6474,7 +7226,7 @@ var PS = {};
                           if (span instanceof SingleLine) {
                               return space;
                           };
-                          throw new Error("Failed pattern match at Format (line 181, column 34 - line 183, column 40): " + [ span.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 205, column 34 - line 207, column 40): " + [ span.constructor.name ]);
                       })();
                       var hidingPrefix = (function () {
                           if (span instanceof MultipleLines) {
@@ -6483,7 +7235,7 @@ var PS = {};
                           if (span instanceof SingleLine) {
                               return space;
                           };
-                          throw new Error("Failed pattern match at Format (line 177, column 34 - line 179, column 40): " + [ span.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 201, column 34 - line 203, column 40): " + [ span.constructor.name ]);
                       })();
                       return hidingPrefix + (formatSourceToken(v)(indent$prime)(blank)(v1.value0.value0) + (importPrefix + formatDelimitedNonEmpty(PureScript_CST_Range.rangeOfImport(PureScript_CST_Range.rangeOfVoid))(v)(span)(indent)(formatImport(v)(indent$prime))(v1.value1)));
                   };
@@ -6495,11 +7247,11 @@ var PS = {};
                           if (span instanceof SingleLine) {
                               return space;
                           };
-                          throw new Error("Failed pattern match at Format (line 197, column 34 - line 199, column 40): " + [ span.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 221, column 34 - line 223, column 40): " + [ span.constructor.name ]);
                       })();
                       return importPrefix + formatDelimitedNonEmpty(PureScript_CST_Range.rangeOfImport(PureScript_CST_Range.rangeOfVoid))(v)(span)(indent$prime)(formatImport(v)(indent$prime))(v1.value1);
                   };
-                  throw new Error("Failed pattern match at Format (line 174, column 39 - line 206, column 31): " + [ v1.value0.constructor.name ]);
+                  throw new Error("Failed pattern match at Format (line 198, column 39 - line 230, column 31): " + [ v1.value0.constructor.name ]);
               })(importDecl$prime.names) + Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(Data_Monoid.monoidString)(function (v1) {
                   var prefix = (function () {
                       if (span instanceof MultipleLines) {
@@ -6508,7 +7260,7 @@ var PS = {};
                       if (span instanceof SingleLine) {
                           return space;
                       };
-                      throw new Error("Failed pattern match at Format (line 212, column 26 - line 214, column 38): " + [ span.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 236, column 26 - line 238, column 38): " + [ span.constructor.name ]);
                   })();
                   return prefix + (formatSourceToken(v)(indent$prime)(blank)(v1.value0) + formatName(v)(indent$prime)(space)(v1.value1));
               })(importDecl$prime.qualified)));
@@ -6542,7 +7294,7 @@ var PS = {};
                           if (oneOrDelimited instanceof PureScript_CST_Types.Many) {
                               return formatDelimitedNonEmpty(dictRangeOf)(settings)(lines)(indent)(formatValue)(oneOrDelimited.value0);
                           };
-                          throw new Error("Failed pattern match at Format (line 1376, column 73 - line 1378, column 108): " + [ oneOrDelimited.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1412, column 73 - line 1414, column 108): " + [ oneOrDelimited.constructor.name ]);
                       };
                   };
               };
@@ -6561,7 +7313,7 @@ var PS = {};
                           if (lines instanceof SingleLine) {
                               return indent;
                           };
-                          throw new Error("Failed pattern match at Format (line 1580, column 14 - line 1582, column 25): " + [ lines.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1619, column 14 - line 1621, column 25): " + [ lines.constructor.name ]);
                       })();
                       return formatWrapped(v)(indent)(formatValue(indented))(wrapped);
                   };
@@ -6581,7 +7333,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(space, space);
                       };
-                      throw new Error("Failed pattern match at Format (line 952, column 25 - line 954, column 37): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 988, column 25 - line 990, column 37): " + [ lines.constructor.name ]);
                   })();
                   return formatWrapped(settings)(indent)(function (separated$prime) {
                       return v.value0 + (formatSeparated(settings)(lines)(indent)(space)(formatValue)(separated$prime) + v.value1);
@@ -6604,7 +7356,7 @@ var PS = {};
                           close: v.close
                       });
                   };
-                  throw new Error("Failed pattern match at Format (line 932, column 44 - line 941, column 52): " + [ v.constructor.name ]);
+                  throw new Error("Failed pattern match at Format (line 968, column 44 - line 977, column 52): " + [ v.constructor.name ]);
               };
           };
       };
@@ -6623,7 +7375,7 @@ var PS = {};
                   if (lines instanceof SingleLine) {
                       return new Data_Tuple.Tuple(blank, blank);
                   };
-                  throw new Error("Failed pattern match at Format (line 1783, column 21 - line 1786, column 36): " + [ v1.value.constructor.name, lines.constructor.name ]);
+                  throw new Error("Failed pattern match at Format (line 1822, column 21 - line 1825, column 36): " + [ v1.value.constructor.name, lines.constructor.name ]);
               })();
               return formatSourceToken(v)(indent)(blank)(v1.open) + (v2.value0 + (formatRow(lines)(v)(indent)(v1.value) + (v2.value1 + formatSourceToken(v)(indent)(blank)(v1.close))));
           };
@@ -6643,7 +7395,7 @@ var PS = {};
               if (v instanceof PureScript_CST_Types.TypeVarKinded) {
                   return formatWrapped(settings)(indent)(formatLabeledName(PureScript_CST_Range.rangeOfName)(settings)(indent))(v.value0);
               };
-              throw new Error("Failed pattern match at Format (line 1431, column 40 - line 1433, column 105): " + [ v.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 1470, column 40 - line 1472, column 105): " + [ v.constructor.name ]);
           };
       };
   };
@@ -6668,7 +7420,7 @@ var PS = {};
                                       prefix: space
                                   };
                               };
-                              throw new Error("Failed pattern match at Format (line 1451, column 30 - line 1453, column 58): " + [ v3.constructor.name ]);
+                              throw new Error("Failed pattern match at Format (line 1490, column 30 - line 1492, column 58): " + [ v3.constructor.name ]);
                           })();
                           return v2.prefix + formatType(v)(v2.indented)(singleOrMultiline(PureScript_CST_Range.rangeOfType(PureScript_CST_Range.rangeOfVoid))(v1.value0))(v1.value0);
                       };
@@ -6682,7 +7434,7 @@ var PS = {};
                           if (lines instanceof SingleLine) {
                               return space;
                           };
-                          throw new Error("Failed pattern match at Format (line 1461, column 14 - line 1463, column 26): " + [ lines.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1500, column 14 - line 1502, column 26): " + [ lines.constructor.name ]);
                       })();
                       return formatType(v)(indent)(singleOrMultiline(PureScript_CST_Range.rangeOfType(PureScript_CST_Range.rangeOfVoid))(t.value0))(t.value0) + (space + (formatSourceToken(v)(indent)(blank)(t.value1) + (prefix + formatType(v)(indent)(singleOrMultiline(PureScript_CST_Range.rangeOfType(PureScript_CST_Range.rangeOfVoid))(t.value2))(t.value2))));
                   };
@@ -6718,7 +7470,7 @@ var PS = {};
                           if (lines instanceof SingleLine) {
                               return space;
                           };
-                          throw new Error("Failed pattern match at Format (line 1479, column 14 - line 1481, column 26): " + [ lines.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1518, column 14 - line 1520, column 26): " + [ lines.constructor.name ]);
                       })();
                       return formatSourceToken(v)(indent)(blank)(t.value0) + (formatTypeVarBindings(v)(indent)(Data_Array_NonEmpty.toArray(t.value1)) + (formatSourceToken(v)(indent)(blank)(t.value2) + (prefix + formatType(v)(indent)(lines)(t.value3))));
                   };
@@ -6736,7 +7488,7 @@ var PS = {};
                                   prefix: space
                               };
                           };
-                          throw new Error("Failed pattern match at Format (line 1489, column 28 - line 1491, column 56): " + [ lines.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1528, column 28 - line 1530, column 56): " + [ lines.constructor.name ]);
                       })();
                       return formatType(v)(indent)(lines)(t.value0) + (space + (formatSourceToken(v)(indent)(blank)(t.value1) + (v1.prefix + formatType(v)(v1.indented)(lines)(t.value2))));
                   };
@@ -6755,7 +7507,7 @@ var PS = {};
                                       prefix: space
                                   };
                               };
-                              throw new Error("Failed pattern match at Format (line 1501, column 30 - line 1503, column 58): " + [ lines.constructor.name ]);
+                              throw new Error("Failed pattern match at Format (line 1540, column 30 - line 1542, column 58): " + [ lines.constructor.name ]);
                           })();
                           return formatQualifiedName(v)(v2.indented)(v2.prefix)(v1.value0) + (v2.prefix + formatType(v)(v2.indented)(singleOrMultiline(PureScript_CST_Range.rangeOfType(PureScript_CST_Range.rangeOfVoid))(v1.value1))(v1.value1));
                       };
@@ -6772,7 +7524,7 @@ var PS = {};
                           if (lines instanceof SingleLine) {
                               return space;
                           };
-                          throw new Error("Failed pattern match at Format (line 1512, column 14 - line 1514, column 26): " + [ lines.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1551, column 14 - line 1553, column 26): " + [ lines.constructor.name ]);
                       })();
                       return formatType(v)(indent)(lines)(t.value0) + (space + (formatSourceToken(v)(indent)(blank)(t.value1) + (prefix + formatType(v)(indent)(lines)(t.value2))));
                   };
@@ -6791,14 +7543,14 @@ var PS = {};
                           if (lines instanceof SingleLine) {
                               return space;
                           };
-                          throw new Error("Failed pattern match at Format (line 1526, column 14 - line 1528, column 26): " + [ lines.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1565, column 14 - line 1567, column 26): " + [ lines.constructor.name ]);
                       })();
                       return formatSourceToken(v)(indent)(blank)(t.value0) + (prefix + formatType(v)(indent)(lines)(t.value1));
                   };
                   if (t instanceof PureScript_CST_Types["TypeError"]) {
                       return Data_Void.absurd(t.value0);
                   };
-                  throw new Error("Failed pattern match at Format (line 1441, column 54 - line 1529, column 30): " + [ t.constructor.name ]);
+                  throw new Error("Failed pattern match at Format (line 1480, column 54 - line 1568, column 30): " + [ t.constructor.name ]);
               };
           };
       };
@@ -6826,7 +7578,7 @@ var PS = {};
                                   after: space
                               };
                           };
-                          throw new Error("Failed pattern match at Format (line 1597, column 35 - line 1599, column 70): " + [ lines.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1636, column 35 - line 1638, column 70): " + [ lines.constructor.name ]);
                       })();
                       var f = formatLabeledName(PureScript_CST_Range.rangeOfName)(v)(v2.indented);
                       return v2.before + (formatSeparated(v)(lines)(indent)(space)(f)(v1.labels.value0) + v2.after);
@@ -6845,7 +7597,7 @@ var PS = {};
                                   after: space
                               };
                           };
-                          throw new Error("Failed pattern match at Format (line 1609, column 25 - line 1611, column 52): " + [ lines.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1648, column 25 - line 1650, column 52): " + [ lines.constructor.name ]);
                       })();
                       return v2.before + (formatSourceToken(v)(indent)(blank)(v1.tail.value0.value0) + (space + (formatType(v)(indent)(lines)(v1.tail.value0.value1) + v2.after)));
                   };
@@ -6867,12 +7619,12 @@ var PS = {};
                                   prefix: space
                               };
                           };
-                          throw new Error("Failed pattern match at Format (line 1621, column 43 - line 1623, column 85): " + [ lines.constructor.name ]);
+                          throw new Error("Failed pattern match at Format (line 1660, column 43 - line 1662, column 85): " + [ lines.constructor.name ]);
                       })();
                       var f = formatLabeledName(PureScript_CST_Range.rangeOfName)(v)(v2.indented);
                       return v2.before + (formatSeparated(v)(lines)(indent)(space)(f)(v1.labels.value0) + (v2.prefix + (formatSourceToken(v)(indent)(blank)(v1.tail.value0.value0) + (space + (formatType(v)(indent)(lines)(v1.tail.value0.value1) + v2.after)))));
                   };
-                  throw new Error("Failed pattern match at Format (line 1590, column 78 - line 1625, column 44): " + [ v1.labels.constructor.name, v1.tail.constructor.name ]);
+                  throw new Error("Failed pattern match at Format (line 1629, column 78 - line 1664, column 44): " + [ v1.labels.constructor.name, v1.tail.constructor.name ]);
               };
           };
       };
@@ -6910,7 +7662,7 @@ var PS = {};
                       if (v1 instanceof SingleLine) {
                           return space;
                       };
-                      throw new Error("Failed pattern match at Format (line 580, column 16 - line 582, column 28): " + [ v1.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 604, column 16 - line 606, column 28): " + [ v1.constructor.name ]);
                   })();
                   return formatQualifiedName(v)(indent$prime)(blank)(binder.value0) + Data_Foldable.foldMap(Data_Foldable.foldableArray)(Data_Monoid.monoidString)(function (binder$prime) {
                       return prefix + formatBinder(v)(indent$prime)(binder$prime);
@@ -6931,7 +7683,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime, space);
                       };
-                      throw new Error("Failed pattern match at Format (line 600, column 24 - line 602, column 37): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 624, column 24 - line 626, column 37): " + [ lines.constructor.name ]);
                   })();
                   var formatNamedBinder = function (v2) {
                       return formatQualifiedName(v)(indent$prime)(v1.value1)(v2.value0) + (v1.value1 + formatBinder(v)(v1.value0)(v2.value1));
@@ -6959,7 +7711,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime, space);
                       };
-                      throw new Error("Failed pattern match at Format (line 625, column 26 - line 627, column 39): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 649, column 26 - line 651, column 39): " + [ lines.constructor.name ]);
                   })();
                   return formatBinder(v)(indent$prime)(binder.value0) + (formatSourceToken(v)(indent$prime)(space)(binder.value1) + (v1.value1 + formatType(v)(v1.value0)(lines)(binder.value2)));
               };
@@ -6975,7 +7727,7 @@ var PS = {};
               if (binder instanceof PureScript_CST_Types.BinderError) {
                   return Data_Void.absurd(binder.value0);
               };
-              throw new Error("Failed pattern match at Format (line 566, column 56 - line 637, column 32): " + [ binder.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 590, column 56 - line 661, column 32): " + [ binder.constructor.name ]);
           };
       };
   };
@@ -6997,7 +7749,7 @@ var PS = {};
                           prefix: space
                       };
                   };
-                  throw new Error("Failed pattern match at Format (line 1403, column 26 - line 1408, column 54): " + [ lines.constructor.name ]);
+                  throw new Error("Failed pattern match at Format (line 1439, column 26 - line 1447, column 8): " + [ lines.constructor.name ]);
               })();
               var formatField = function (typo) {
                   return v2.prefix + formatType(v)(v2.indented)(lines)(typo);
@@ -7017,7 +7769,7 @@ var PS = {};
                   if (lines instanceof SingleLine) {
                       return new Data_Tuple.Tuple(indent$prime$prime, new Data_Tuple.Tuple(indent$prime$prime, space));
                   };
-                  throw new Error("Failed pattern match at Format (line 496, column 37 - line 501, column 52): " + [ lines.constructor.name ]);
+                  throw new Error("Failed pattern match at Format (line 520, column 37 - line 525, column 52): " + [ lines.constructor.name ]);
               })();
               var typePrefix = (function () {
                   var v3 = Data_Array.last(v1.types);
@@ -7029,12 +7781,12 @@ var PS = {};
                       if (v4 instanceof SingleLine) {
                           return space;
                       };
-                      throw new Error("Failed pattern match at Format (line 504, column 24 - line 506, column 28): " + [ v4.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 528, column 24 - line 530, column 28): " + [ v4.constructor.name ]);
                   };
                   if (v3 instanceof Data_Maybe.Nothing) {
                       return space;
                   };
-                  throw new Error("Failed pattern match at Format (line 503, column 18 - line 507, column 23): " + [ v3.constructor.name ]);
+                  throw new Error("Failed pattern match at Format (line 527, column 18 - line 531, column 23): " + [ v3.constructor.name ]);
               })();
               return formatSourceToken(v)(indent$prime$prime)(blank)(v1.keyword) + (Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(Data_Monoid.monoidString)(function (v3) {
                   return formatName(v)(indent$prime$prime)(space)(v3.name) + formatSourceToken(v)(indent$prime$prime)(space)(v3.separator);
@@ -7066,7 +7818,7 @@ var PS = {};
                               prefix: space
                           };
                       };
-                      throw new Error("Failed pattern match at Format (line 1323, column 26 - line 1328, column 54): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1359, column 26 - line 1364, column 54): " + [ lines.constructor.name ]);
                   })();
                   var formatTypeVariableBinding = function (binding) {
                       return space + formatTypeVarBinding(v)(indent)(binding);
@@ -7119,7 +7871,7 @@ var PS = {};
               if (foreign$prime$prime instanceof PureScript_CST_Types.ForeignValue) {
                   return formatLabeledNameType(settings)(indent$prime)(foreign$prime$prime.value0);
               };
-              throw new Error("Failed pattern match at Format (line 411, column 44 - line 420, column 52): " + [ foreign$prime$prime.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 435, column 44 - line 444, column 52): " + [ foreign$prime$prime.constructor.name ]);
           };
       };
   };
@@ -7127,9 +7879,43 @@ var PS = {};
       return function (indent$prime) {
           return function (v1) {
               var indent = indent$prime + v.indentation;
-              return formatExprPrefix(singleOrMultiline(PureScript_CST_Range.rangeOfExpr(PureScript_CST_Range.rangeOfVoid))(v1.expr))(v)(indent$prime)(v1.expr) + Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(Data_Monoid.monoidString)(function (v2) {
-                  return newline + indent + (formatSourceToken(v)(indent)(blank)(v2.value0) + (Data_Foldable.foldMap(Data_Foldable.foldableArray)(Data_Monoid.monoidString)(formatLetBinding(v)(indent)(newline + indent)(newline))(Data_Array_NonEmpty.init(v2.value1)) + formatLetBinding(v)(indent)(newline + indent)(blank)(Data_Array_NonEmpty.last(v2.value1))));
-              })(v1.bindings);
+              var formatLetBindingWithFollowing = function (v2) {
+                  var suffix = (function () {
+                      if (v2.value1 instanceof Data_Maybe.Nothing) {
+                          return blank;
+                      };
+                      if (v2.value1 instanceof Data_Maybe.Just) {
+                          var $663 = isPrecededByBlankLines(PureScript_CST_Range.tokensOfLetBinding(PureScript_CST_Range.tokensOfVoid))(v2.value1.value0);
+                          if ($663) {
+                              return newline;
+                          };
+                          return blank;
+                      };
+                      throw new Error("Failed pattern match at Format (line 715, column 18 - line 719, column 33): " + [ v2.value1.constructor.name ]);
+                  })();
+                  return formatLetBinding(v)(indent)(newline + indent)(suffix)(v2.value0);
+              };
+              var formatLetBindings = function (letBindings$prime) {
+                  return Data_Foldable.foldMap(Data_Array_NonEmpty_Internal.foldableNonEmptyArray)(Data_Monoid.monoidString)(formatLetBindingWithFollowing)(Data_Array_NonEmpty.zip(letBindings$prime)(Data_Array_NonEmpty["snoc'"](Data_Functor.map(Data_Functor.functorArray)(Data_Maybe.Just.create)(Data_Array_NonEmpty.tail(letBindings$prime)))(Data_Maybe.Nothing.value)));
+              };
+              var formatWhereAndBindings = function (v2) {
+                  var whereSuffix = (function () {
+                      var $668 = isPrecededByBlankLines(PureScript_CST_Range.tokensOfLetBinding(PureScript_CST_Range.tokensOfVoid))(Data_Array_NonEmpty.head(v2.value1));
+                      if ($668) {
+                          return newline;
+                      };
+                      return blank;
+                  })();
+                  var wherePrefix = (function () {
+                      var $669 = precedingEmptyLines(v2.value0.leadingComments) > 1;
+                      if ($669) {
+                          return newline;
+                      };
+                      return blank;
+                  })();
+                  return wherePrefix + (newline + indent) + (formatSourceToken(v)(indent)(blank)(v2.value0) + (whereSuffix + formatLetBindings(v2.value1)));
+              };
+              return formatExprPrefix(singleOrMultiline(PureScript_CST_Range.rangeOfExpr(PureScript_CST_Range.rangeOfVoid))(v1.expr))(v)(indent$prime)(v1.expr) + Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(Data_Monoid.monoidString)(formatWhereAndBindings)(v1.bindings);
           };
       };
   };
@@ -7156,7 +7942,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime, space);
                       };
-                      throw new Error("Failed pattern match at Format (line 1005, column 26 - line 1007, column 39): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1041, column 26 - line 1043, column 39): " + [ lines.constructor.name ]);
                   })();
                   return formatName(v)(indent$prime)(blank)(recordUpdate$prime.value0) + (v1.value1 + formatRecordNonEmpty(v)(v1.value0)(formatRecordUpdate(v)(v1.value0))(recordUpdate$prime.value1));
               };
@@ -7170,11 +7956,11 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime, space);
                       };
-                      throw new Error("Failed pattern match at Format (line 1021, column 26 - line 1023, column 39): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1057, column 26 - line 1059, column 39): " + [ lines.constructor.name ]);
                   })();
                   return formatName(v)(indent$prime)(blank)(recordUpdate$prime.value0) + (formatSourceToken(v)(indent$prime)(space)(recordUpdate$prime.value1) + (v1.value1 + formatExpr(v)(v1.value0)(recordUpdate$prime.value2)));
               };
-              throw new Error("Failed pattern match at Format (line 998, column 69 - line 1027, column 42): " + [ recordUpdate$prime.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 1034, column 69 - line 1063, column 42): " + [ recordUpdate$prime.constructor.name ]);
           };
       };
   };
@@ -7190,7 +7976,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime, blank);
                       };
-                      throw new Error("Failed pattern match at Format (line 978, column 26 - line 980, column 39): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1014, column 26 - line 1016, column 39): " + [ lines.constructor.name ]);
                   })();
                   return formatExpr(v)(v1.value0)(recordAccessor$prime.expr) + (v1.value1 + (formatSourceToken(v)(v1.value0)(blank)(recordAccessor$prime.dot) + formatSeparated(v)(lines)(v1.value0)(blank)(formatName(v)(indent$prime)(blank))(recordAccessor$prime.path)));
               };
@@ -7207,7 +7993,7 @@ var PS = {};
               if (v1.binder instanceof Data_Maybe.Nothing) {
                   return formatExpr(v)(indent)(v1.expr);
               };
-              throw new Error("Failed pattern match at Format (line 735, column 110 - line 740, column 46): " + [ v1.binder.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 771, column 110 - line 776, column 46): " + [ v1.binder.constructor.name ]);
           };
       };
   };
@@ -7222,7 +8008,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(space, new Data_Tuple.Tuple(indent$prime, space));
                       };
-                      throw new Error("Failed pattern match at Format (line 1063, column 38 - line 1065, column 48): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1099, column 38 - line 1101, column 48): " + [ lines.constructor.name ]);
                   })();
                   return formatSourceToken(v)(indent$prime)(blank)(letIn$prime.keyword) + (Data_Foldable.foldMap(Data_Foldable.foldableArray)(Data_Monoid.monoidString)(formatLetBinding(v)(v1.value1.value0)(v1.value1.value1)(newline))(Data_Array_NonEmpty.init(letIn$prime.bindings)) + (formatLetBinding(v)(v1.value1.value0)(v1.value1.value1)(blank)(Data_Array_NonEmpty.last(letIn$prime.bindings)) + (v1.value0 + (formatSourceToken(v)(indent$prime)(blank)(letIn$prime["in"]) + (v1.value1.value1 + formatExpr(v)(v1.value1.value0)(letIn$prime.body))))));
               };
@@ -7246,7 +8032,7 @@ var PS = {};
                       if (v1 instanceof PureScript_CST_Types.LetBindingError) {
                           return Data_Void.absurd(v1.value0);
                       };
-                      throw new Error("Failed pattern match at Format (line 692, column 67 - line 706, column 36): " + [ v1.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 728, column 67 - line 742, column 36): " + [ v1.constructor.name ]);
                   };
               };
           };
@@ -7274,7 +8060,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return space;
                       };
-                      throw new Error("Failed pattern match at Format (line 1141, column 12 - line 1143, column 24): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1177, column 12 - line 1179, column 24): " + [ lines.constructor.name ]);
                   })();
                   return formatSourceToken(v)(indent)(blank)(v1.keyword) + (space + (formatExpr(v)(indent)(v1.cond) + (space + (formatSourceToken(v)(indent)(blank)(v1.then) + (formatExprPrefix(lines)(v)(indent)(v1["true"]) + (prefix + (formatSourceToken(v)(indent)(blank)(v1["else"]) + formatExprPrefixElseIf(lines)(v)(indent)(v1["false"]))))))));
               };
@@ -7301,7 +8087,7 @@ var PS = {};
               if (v1 instanceof PureScript_CST_Types.Unconditional) {
                   return formatSourceToken(v)(indent$prime)(space)(v1.value0) + formatWhere(v)(indent$prime)(v1.value1);
               };
-              throw new Error("Failed pattern match at Format (line 646, column 50 - line 658, column 49): " + [ v1.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 670, column 50 - line 682, column 49): " + [ v1.constructor.name ]);
           };
       };
   };
@@ -7390,7 +8176,7 @@ var PS = {};
                   if (expr$prime instanceof PureScript_CST_Types.ExprError) {
                       return Data_Void.absurd(expr$prime.value0);
                   };
-                  throw new Error("Failed pattern match at Format (line 1095, column 70 - line 1122, column 30): " + [ expr$prime.constructor.name ]);
+                  throw new Error("Failed pattern match at Format (line 1131, column 70 - line 1158, column 30): " + [ expr$prime.constructor.name ]);
               };
           };
       };
@@ -7481,7 +8267,7 @@ var PS = {};
                       if (expr instanceof PureScript_CST_Types.ExprError) {
                           return Data_Void.absurd(expr.value0);
                       };
-                      throw new Error("Failed pattern match at Format (line 747, column 12 - line 774, column 32): " + [ expr.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 783, column 12 - line 810, column 32): " + [ expr.constructor.name ]);
                   })();
                   var multiLine = (function () {
                       if (expr instanceof PureScript_CST_Types.ExprAdo) {
@@ -7565,7 +8351,7 @@ var PS = {};
                       if (expr instanceof PureScript_CST_Types.ExprError) {
                           return Data_Void.absurd(expr.value0);
                       };
-                      throw new Error("Failed pattern match at Format (line 776, column 15 - line 803, column 32): " + [ expr.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 812, column 15 - line 839, column 32): " + [ expr.constructor.name ]);
                   })();
                   var prefix = (function () {
                       if (lines instanceof MultipleLines) {
@@ -7574,7 +8360,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return space;
                       };
-                      throw new Error("Failed pattern match at Format (line 806, column 12 - line 808, column 24): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 842, column 12 - line 844, column 24): " + [ lines.constructor.name ]);
                   })();
                   return prefix + formatExpr(v)(indent)(expr);
               };
@@ -7602,7 +8388,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return indent$prime$prime;
                       };
-                      throw new Error("Failed pattern match at Format (line 824, column 17 - line 826, column 31): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 860, column 17 - line 862, column 31): " + [ lines.constructor.name ]);
                   })();
                   return formatArray(PureScript_CST_Range.rangeOfExpr(PureScript_CST_Range.rangeOfVoid))(v)(lines)(indent$prime$prime)(formatExpr(v)(indent$prime))(expr$prime$prime.value0);
               };
@@ -7638,7 +8424,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime$prime, new Data_Tuple.Tuple(indent$prime$prime, new Data_Tuple.Tuple(space, space)));
                       };
-                      throw new Error("Failed pattern match at Format (line 846, column 48 - line 853, column 61): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 882, column 48 - line 889, column 61): " + [ lines.constructor.name ]);
                   })();
                   var formatOne = function (v2) {
                       return formatWrapped(v)(v1.value0)(formatExpr(v)(v1.value1.value0))(v2.value0) + (v1.value1.value1.value1 + formatExpr(v)(v1.value0)(v2.value1));
@@ -7665,7 +8451,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime$prime + v.indentation, new Data_Tuple.Tuple(indent$prime$prime, space));
                       };
-                      throw new Error("Failed pattern match at Format (line 870, column 37 - line 872, column 69): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 906, column 37 - line 908, column 69): " + [ lines.constructor.name ]);
                   })();
                   return formatExpr(v)(indent$prime$prime)(expr$prime$prime.value0) + Data_Foldable.foldMap(Data_Array_NonEmpty_Internal.foldableNonEmptyArray)(Data_Monoid.monoidString)(function (v2) {
                       return formatQualifiedName(v)(v1.value1.value0)(v1.value1.value1)(v2.value0) + (space + formatExpr(v)(v1.value0)(v2.value1));
@@ -7691,7 +8477,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime$prime, space);
                       };
-                      throw new Error("Failed pattern match at Format (line 899, column 27 - line 901, column 40): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 935, column 27 - line 937, column 40): " + [ lines.constructor.name ]);
                   })();
                   return formatExpr(v)(indent$prime$prime)(expr$prime$prime.value0) + (v1.value1 + formatRecordNonEmpty(v)(v1.value0)(formatRecordUpdate(v)(v1.value0))(expr$prime$prime.value1));
               };
@@ -7709,7 +8495,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime$prime, space);
                       };
-                      throw new Error("Failed pattern match at Format (line 913, column 27 - line 915, column 40): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 949, column 27 - line 951, column 40): " + [ lines.constructor.name ]);
                   })();
                   return formatExpr(v)(indent$prime$prime)(expr$prime$prime.value0) + (formatSourceToken(v)(indent$prime$prime)(space)(expr$prime$prime.value1) + (v1.value1 + formatType(v)(v1.value0)(lines)(expr$prime$prime.value2)));
               };
@@ -7719,7 +8505,7 @@ var PS = {};
               if (expr$prime$prime instanceof PureScript_CST_Types.ExprError) {
                   return Data_Void.absurd(expr$prime$prime.value0);
               };
-              throw new Error("Failed pattern match at Format (line 815, column 55 - line 921, column 30): " + [ expr$prime$prime.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 851, column 55 - line 957, column 30): " + [ expr$prime$prime.constructor.name ]);
           };
       };
   };
@@ -7739,7 +8525,7 @@ var PS = {};
               if (doStatement$prime instanceof PureScript_CST_Types.DoError) {
                   return Data_Void.absurd(doStatement$prime.value0);
               };
-              throw new Error("Failed pattern match at Format (line 1172, column 67 - line 1192, column 28): " + [ doStatement$prime.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 1208, column 67 - line 1228, column 28): " + [ doStatement$prime.constructor.name ]);
           };
       };
   };
@@ -7755,7 +8541,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime, space);
                       };
-                      throw new Error("Failed pattern match at Format (line 1156, column 26 - line 1158, column 39): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1192, column 26 - line 1194, column 39): " + [ lines.constructor.name ]);
                   })();
                   return formatSourceToken(v)(indent$prime)(blank)(doBlock$prime.keyword) + Data_Foldable.foldMap(Data_Array_NonEmpty_Internal.foldableNonEmptyArray)(Data_Monoid.monoidString)(function (doStatement$prime) {
                       return v1.value1 + formatDoStatement(v)(v1.value0)(doStatement$prime);
@@ -7775,7 +8561,7 @@ var PS = {};
                       if (lines instanceof SingleLine) {
                           return new Data_Tuple.Tuple(indent$prime, space);
                       };
-                      throw new Error("Failed pattern match at Format (line 1203, column 26 - line 1205, column 39): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1239, column 26 - line 1241, column 39): " + [ lines.constructor.name ]);
                   })();
                   return formatSourceToken(v)(indent$prime)(blank)(caseOf$prime.keyword) + (space + (formatSeparated(v)(singleOrMultiline(PureScript_CST_Range.rangeOfSeparated(PureScript_CST_Range.rangeOfExpr(PureScript_CST_Range.rangeOfVoid)))(caseOf$prime.head))(v1.value0)(space)(formatExpr(v)(v1.value0))(caseOf$prime.head) + (space + (formatSourceToken(v)(indent$prime)(blank)(caseOf$prime.of) + Data_Foldable.foldMap(Data_Array_NonEmpty_Internal.foldableNonEmptyArray)(Data_Monoid.monoidString)(function (v2) {
                       return v1.value1 + (formatSeparated(v)(singleOrMultiline(PureScript_CST_Range.rangeOfSeparated(PureScript_CST_Range.rangeOfBinder(PureScript_CST_Range.rangeOfVoid)))(v2.value0))(v1.value0)(space)(formatBinder(v)(v1.value0))(v2.value0) + formatGuarded(v)(v1.value0)(v2.value1));
@@ -7802,7 +8588,7 @@ var PS = {};
                               prefix: space
                           };
                       };
-                      throw new Error("Failed pattern match at Format (line 1281, column 26 - line 1286, column 55): " + [ lines.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 1317, column 26 - line 1322, column 55): " + [ lines.constructor.name ]);
                   })();
                   return formatSourceToken(v)(indent$prime)(blank)(v1.keyword) + (Data_Foldable.foldMap(Data_Foldable.foldableArray)(Data_Monoid.monoidString)(function (doStatement$prime) {
                       return v2.prefix + formatDoStatement(v)(v2.indent)(doStatement$prime);
@@ -7820,7 +8606,7 @@ var PS = {};
               if (v instanceof PureScript_CST_Types.InstanceBindingName) {
                   return formatValueBindingFields(settings)(indent)(v.value0);
               };
-              throw new Error("Failed pattern match at Format (line 537, column 41 - line 541, column 64): " + [ v.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 561, column 41 - line 565, column 64): " + [ v.constructor.name ]);
           };
       };
   };
@@ -7845,7 +8631,7 @@ var PS = {};
               var indented = indent + v.indentation;
               if (declaration instanceof PureScript_CST_Types.DeclData) {
                   var formatDataConstructors = function (v1) {
-                      return newline + indented + (formatSourceToken(v)(indented)(blank)(v1.value0) + formatSeparated(v)(singleOrMultiline(PureScript_CST_Range.rangeOfDecl(PureScript_CST_Range.rangeOfVoid))(declaration))(indented)(blank)(formatDataConstructor(v)(indented))(v1.value1));
+                      return newline + indented + (formatSourceToken(v)(indented)(blank)(v1.value0) + formatSeparated(v)(MultipleLines.value)(indented)(blank)(formatDataConstructor(v)(indented))(v1.value1));
                   };
                   return formatDataHead(v)(indent)(declaration.value0) + (Data_Foldable.foldMap(Data_Foldable.foldableMaybe)(Data_Monoid.monoidString)(formatDataConstructors)(declaration.value1) + newline);
               };
@@ -7861,7 +8647,7 @@ var PS = {};
                       if (v1 instanceof SingleLine) {
                           return space;
                       };
-                      throw new Error("Failed pattern match at Format (line 337, column 14 - line 339, column 26): " + [ v1.constructor.name ]);
+                      throw new Error("Failed pattern match at Format (line 361, column 14 - line 363, column 26): " + [ v1.constructor.name ]);
                   })();
                   return formatDataHead(v)(indent)(declaration.value0) + (newline + indented + (formatSourceToken(v)(indented)(blank)(declaration.value1) + (space + (formatName(v)(indented)(blank)(declaration.value2) + (prefix + (formatType(v)(indented)(lines)(declaration.value3) + newline))))));
               };
@@ -7903,13 +8689,13 @@ var PS = {};
               if (declaration instanceof PureScript_CST_Types.DeclError) {
                   return Data_Void.absurd(declaration.value0);
               };
-              throw new Error("Failed pattern match at Format (line 303, column 65 - line 392, column 30): " + [ declaration.constructor.name ]);
+              throw new Error("Failed pattern match at Format (line 327, column 65 - line 416, column 30): " + [ declaration.constructor.name ]);
           };
       };
   };
-  var formatDeclarations = function (v) {
+  var formatDeclarations = function (settings) {
       var formatOne = function (declaration) {
-          return newline + formatDeclaration(v)(blank)(declaration);
+          return newline + formatDeclaration(settings)(blank)(declaration);
       };
       return Data_Foldable.foldMap(Data_Foldable.foldableArray)(Data_Monoid.monoidString)(formatOne);
   };
