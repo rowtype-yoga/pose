@@ -1,0 +1,25 @@
+{
+  "name": "@shape/prettier-plugin-purescript",
+  "version": "1.0.0",
+  "description": "A prettier plugin that formats PureScript code using shape",
+  "main": "index.js",
+  "files": ["index.js"],
+  "directory": "packages/prettier-plugin-purescript",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "spago bundle-module --main Prettier --to index.js",
+    "test": "spago test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/i-am-the-slime/shape.git"
+  },
+  "author": "Mark Eibes",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/i-am-the-slime/shape/issues"
+  },
+  "homepage": "https://github.com/i-am-the-slime/shape#readme"
+}

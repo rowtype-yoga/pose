@@ -4,16 +4,11 @@ module Prettier (languages, parsers, printers
 
 import Prelude
 
-import Data.Either (hush)
 import Data.Function.Uncurried (mkFn3)
-import Data.Maybe (fromMaybe)
-import Data.Nullable (Nullable, toNullable)
-import Data.Nullable as Nullable
 import Data.String.CodeUnits as String
 import Effect (Effect)
-import Effect.Aff.Compat (EffectFn3, mkEffectFn1, mkEffectFn3)
+import Effect.Aff.Compat (EffectFn3, mkEffectFn3)
 import Format (format)
-import Main (parseAndFormat')
 import PureScript.CST (RecoveredParserResult(..), parseModule)
 import PureScript.CST.Types as CST
 import Settings (defaultSettings)

@@ -1,9 +1,0 @@
-{
-  "devDependencies": {},
-  "dependencies": {},
-  "directory": "packages/prettier-plugin-purescript-shape",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/i-am-the-slime/shape.git"
-  }
-}

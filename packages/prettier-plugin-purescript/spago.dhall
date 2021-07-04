@@ -10,8 +10,18 @@ When creating a new Spago project, you can use
 `spago init --no-comments` or `spago init -C`
 to generate this file without the comments in this block.
 -}
-{ name = "prettier-plugin-purescript-shape"
-, dependencies = [ "console", "effect", "prelude", "psci-support" ]
-, packages = ../packages.dhall
+{ name = "prettier-plugin-purescript"
+, dependencies =
+  [ "aff"
+  , "console"
+  , "effect"
+  , "functions"
+  , "language-cst-parser"
+  , "prelude"
+  , "psci-support"
+  , "shape-core"
+  , "strings"
+  ]
+, packages = ../../packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
 }
