@@ -1,6 +1,7 @@
 module Format (format) where
 
 import Prelude
+import Data.Array (any, foldl)
 import Data.Array as Array
 import Data.Array.NonEmpty as NE
 import Data.Array.NonEmpty.Internal (NonEmptyArray)
@@ -10,6 +11,8 @@ import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (ala)
 import Data.Semigroup.Foldable (intercalateMap)
+import Data.String.CodeUnits (lastIndexOf)
+import Data.String.CodeUnits as String
 import Data.Tuple (fst, snd)
 import Data.Tuple.Nested (type (/\), (/\))
 import Partial.Unsafe (unsafeCrashWith)
@@ -34,14 +37,25 @@ precedingEmptyLines =
     _ → 0
 
 isPrecededByBlankLines ∷ ∀ t. TokensOf t ⇒ t → Boolean
-isPrecededByBlankLines x = case TokensOf.head (tokensOf x) of
-  Just { leadingComments } → precedingEmptyLines leadingComments > 1
+isPrecededByBlankLines x =
+  precedingEmptyLines (unsafeFirstTokenOf x).leadingComments > 1
+
+unsafeFirstTokenOf x = case TokensOf.head (tokensOf x) of
+  Just sourceToken → sourceToken
   Nothing → unsafeCrashWith "Unexpectedly got no tokens"
 
 isPrecededByNewline ∷ ∀ t. TokensOf t ⇒ t → Boolean
 isPrecededByNewline x = case TokensOf.head (tokensOf x) of
   Just { leadingComments } → precedingEmptyLines leadingComments > 0
   Nothing → unsafeCrashWith "Unexpectedly got no tokens"
+
+hasNonWhitespaceTrailingComment ∷ CST.SourceToken → Boolean
+hasNonWhitespaceTrailingComment =
+  _.trailingComments
+    >>> any case _ of
+        CST.Comment "" → false -- Don't think this should happen
+        CST.Comment _ → true
+        _ → false
 
 commentIsSpaceOrLineFeed ∷ ∀ c. CST.Comment c → Boolean
 commentIsSpaceOrLineFeed = case _ of
@@ -53,7 +67,8 @@ singleOrMultiline ∷ ∀ a. RangeOf a ⇒ a → Lines
 singleOrMultiline value = singleOrMultilineFromRange (rangeOf value)
 
 singleOrMultilineFromRange ∷ CST.SourceRange → Lines
-singleOrMultilineFromRange { start, end } = if start.line == end.line then SingleLine else MultipleLines
+singleOrMultilineFromRange { start, end } =
+  if start.line == end.line then SingleLine else MultipleLines
 
 singleOrMultilineBetween ∷ ∀ a b. RangeOf a ⇒ RangeOf b ⇒ a → b → Lines
 singleOrMultilineBetween a b = do
@@ -187,7 +202,12 @@ formatImportDeclaration ∷
   CST.ImportDecl Void →
   String
 formatImportDeclaration settings@{ indentation } indent'' importDecl' = case importDecl' of
-  CST.ImportDecl { keyword: import'', module: name'', names: imports'', qualified: rename } → do
+  CST.ImportDecl
+    { keyword: import''
+  , module: name''
+  , names: imports''
+  , qualified: rename
+  } → do
     let span = singleOrMultiline importDecl'
     let indent' = indent'' <> indentation
     formatSourceToken settings indent'' blank import''
@@ -923,9 +943,27 @@ formatExpr settings@{ indentation } indent'' expr'' = case expr'' of
         SingleLine → (indent'' <> indentation) /\ indent'' /\ space
     formatExpr settings indent'' expr1
       <> foldMap
-          ( \(op /\ expr) →
+          ( \(op /\ expr) → do
+              let
+                -- To preserve alignment of brackets, commas, etc.
+                -- we need to add a newline if there's a multiline record, 
+                -- array, etc.
+                prefix' = case expr of
+                  CST.ExprRecord _ → case singleOrMultiline expr of
+                    MultipleLines →
+                      (newline <> indent'' <> indentation <> indentation)
+                    SingleLine → space
+                  CST.ExprRecordUpdate _ _ → case singleOrMultiline expr of
+                    MultipleLines →
+                      (newline <> indent'' <> indentation <> indentation)
+                    SingleLine → space
+                  CST.ExprArray _ → case singleOrMultiline expr of
+                    MultipleLines →
+                      (newline <> indent'' <> indentation <> indentation)
+                    SingleLine → space
+                  _ → space
               formatQualifiedName settings indent' prefix op
-                <> space
+                <> prefix'
                 <> formatExpr settings indent expr
           )
           expressions
@@ -998,7 +1036,7 @@ formatRecordNonEmpty ∷
   (a → String) →
   CST.DelimitedNonEmpty a →
   String
-formatRecordNonEmpty settings indent formatValue record' = do
+formatRecordNonEmpty settings indent formatValue record'@(CST.Wrapped { open }) = do
   let
     (before /\ after) = case lines of
       MultipleLines → (blank /\ blank)
@@ -1008,7 +1046,7 @@ formatRecordNonEmpty settings indent formatValue record' = do
     indent
     ( \separated' →
         before
-          <> formatSeparated settings lines indent space formatValue separated' -- [CHECK] is the lines correct
+          <> formatSeparated settings lines indent space formatValue separated'
           <> after
     )
     record'
@@ -1049,7 +1087,6 @@ formatRecordUpdate settings@{ indentation } indent' recordUpdate' = case recordU
   CST.RecordUpdateBranch label' delimitedNonEmpty' → do
     let
       lines = singleOrMultiline delimitedNonEmpty'
-
       indentTrick = indent' <> indentation
 
       indent /\ prefix = case lines of
@@ -1456,7 +1493,9 @@ formatDataConstructor ∷
   Indent →
   CST.DataCtor Void →
   String
-formatDataConstructor settings@{ indentation } indent constructor@(CST.DataCtor { name, fields }) =
+formatDataConstructor
+  settings@{ indentation } indent
+  constructor@(CST.DataCtor { name, fields }) =
   space
     <> formatName settings indent blank name
     <> foldMap formatField fields
@@ -1487,7 +1526,8 @@ formatTypeVarBindings ∷
   Indent →
   Array (CST.TypeVarBinding Void) →
   String
-formatTypeVarBindings settings indent = foldMap (pure space <> formatTypeVarBinding settings indent)
+formatTypeVarBindings settings indent =
+  foldMap (pure space <> formatTypeVarBinding settings indent)
 
 formatTypeVarBinding ∷
   Settings →
@@ -1512,7 +1552,9 @@ formatType settings@{ indentation } indent lines t = case t of
     where
     typesArray = NE.toArray types
 
-    formatTypeWithPredecessor (curr /\ pred) = prefix <> formatType settings indented (singleOrMultiline curr) curr
+    formatTypeWithPredecessor (curr /\ pred) =
+      prefix
+        <> formatType settings indented (singleOrMultiline curr) curr
       where
       { indented, prefix } = case singleOrMultilineBetween curr pred of
         MultipleLines → { indented: indent <> indentation, prefix: newline <> indent <> indentation }
@@ -1553,7 +1595,8 @@ formatType settings@{ indentation } indent lines t = case t of
       <> formatType settings indented lines kind
     where
     { indented, prefix } = case lines of
-      MultipleLines → { indented: indent <> indentation, prefix: newline <> indent }
+      MultipleLines →
+        { indented: indent <> indentation, prefix: newline <> indent }
       SingleLine → { indented: indent, prefix: space }
   CST.TypeOp typo types →
     formatType settings indent (singleOrMultiline typo) typo
@@ -1562,10 +1605,12 @@ formatType settings@{ indentation } indent lines t = case t of
     formatOp (op /\ anotherType) =
       formatQualifiedName settings indented prefix op
         <> prefix
-        <> formatType settings indented (singleOrMultiline anotherType) anotherType
+        <> formatType settings indented (singleOrMultiline anotherType)
+            anotherType
       where
       { indented, prefix } = case lines of
-        MultipleLines → { indented: indent <> indentation, prefix: newline <> indent }
+        MultipleLines →
+          { indented: indent <> indentation, prefix: newline <> indent }
         SingleLine → { indented: indent, prefix: space }
   CST.TypeOpName op → formatQualifiedName settings indent blank op
   CST.TypeConstrained constraint arrow typo →
@@ -1604,7 +1649,8 @@ formatLabeled ∷
   (Indent → b → String) →
   CST.Labeled a b →
   String
-formatLabeled settings@{ indentation } indent' formatLabel formatValue labeled@(CST.Labeled { label, separator, value }) =
+formatLabeled settings@{ indentation } indent' formatLabel formatValue
+  labeled@(CST.Labeled { label, separator, value }) =
   formatLabel label
     <> formatSourceToken settings indent space separator
     <> prefix
@@ -1653,7 +1699,8 @@ formatRow ∷
   Indent →
   CST.Row Void →
   String
-formatRow lines settings@{ indentation } indent (CST.Row { labels, tail }) = case labels, tail of
+formatRow lines settings@{ indentation } indent
+  (CST.Row { labels, tail }) = case labels, tail of
   Nothing, Nothing → blank
   Just ls, Nothing →
     before
@@ -1661,7 +1708,8 @@ formatRow lines settings@{ indentation } indent (CST.Row { labels, tail }) = cas
       <> after
     where
     { before, indented, after } = case lines of
-      MultipleLines → { before: blank, indented: indent <> indentation, after: blank }
+      MultipleLines →
+        { before: blank, indented: indent <> indentation, after: blank }
       SingleLine → { before: space, indented: indent, after: space }
 
     f = formatLabeledName settings indented
@@ -1685,8 +1733,18 @@ formatRow lines settings@{ indentation } indent (CST.Row { labels, tail }) = cas
       <> after
     where
     { before, indented, after, prefix } = case lines of
-      MultipleLines → { before: blank, indented: indent <> indentation, after: blank, prefix: newline <> indent }
-      SingleLine → { before: space, indented: indent, after: space, prefix: space }
+      MultipleLines →
+        { before: blank
+        , indented: indent <> indentation
+        , after: blank
+        , prefix: newline <> indent
+        }
+      SingleLine →
+        { before: space
+        , indented: indent
+        , after: space
+        , prefix: space
+        }
 
     f = formatLabeledName settings indented
 
@@ -1699,7 +1757,8 @@ formatSeparated ∷
   (a → String) →
   CST.Separated a →
   String
-formatSeparated settings lines indent prefix' formatValue (CST.Separated { head, tail }) = do
+formatSeparated settings lines indent prefix' formatValue
+  (CST.Separated { head, tail }) = do
   formatValue head <> foldMap go tail
   where
   prefix = case lines of
@@ -1714,18 +1773,22 @@ formatSeparated settings lines indent prefix' formatValue (CST.Separated { head,
       <> formatValue value
 
 formatName ∷ ∀ a. Settings → Indent → Prefix → CST.Name a → String
-formatName settings indent prefix (CST.Name { token }) = formatSourceToken settings indent prefix token
+formatName settings indent prefix (CST.Name { token }) =
+  formatSourceToken settings indent prefix token
 
-formatQualifiedName ∷ ∀ a. Settings → Indent → Prefix → CST.QualifiedName a → String
-formatQualifiedName settings indent prefix (CST.QualifiedName { token }) = formatSourceToken settings indent prefix token
-
-formatSourceToken ∷
+formatQualifiedName ∷
+  ∀ a.
   Settings →
   Indent →
   Prefix →
-  CST.SourceToken →
+  CST.QualifiedName a →
   String
-formatSourceToken settings indent prefix { leadingComments, trailingComments, value } =
+formatQualifiedName settings indent prefix (CST.QualifiedName { token }) =
+  formatSourceToken settings indent prefix token
+
+formatSourceToken ∷ Settings → Indent → Prefix → CST.SourceToken → String
+formatSourceToken settings indent prefix
+  { leadingComments, trailingComments, value } =
   formatCommentsLeading indent prefix leadingComments
     <> prefix
     <> print value
@@ -1801,7 +1864,8 @@ formatCommentsTrailingModule commentsTrailing' = do
     comments = map formatComment commentsTrailing'
   case NE.fromArray (Array.catMaybes comments) of
     Nothing → blank
-    Just comments → newline <> fold (NE.intersperse newline comments) <> newline
+    Just comments →
+      newline <> fold (NE.intersperse newline comments) <> newline
 
 formatComment ∷ ∀ lf. CST.Comment lf → Maybe String
 formatComment = case _ of
@@ -1816,8 +1880,10 @@ formatWrapped ∷
   (a → String) →
   CST.Wrapped a →
   String
-formatWrapped settings indent formatValue wrapped@(CST.Wrapped { open, value, close }) =
+formatWrapped settings@{ indentation } indent formatValue
+  wrapped@(CST.Wrapped { open, value, close }) =
   formatSourceToken settings indent blank open
+    <> ensureNewline
     <> before
     <> formatValue value
     <> after
@@ -1826,13 +1892,19 @@ formatWrapped settings indent formatValue wrapped@(CST.Wrapped { open, value, cl
   { before, after } = case singleOrMultiline wrapped of
     MultipleLines → { before: space, after: newline <> indent }
     SingleLine → { before: blank, after: blank }
+  ensureNewline =
+    if hasNonWhitespaceTrailingComment open then
+      newline <> indent <> before
+    else
+      blank
 
 formatWrappedRow ∷
   Settings →
   Indent →
   CST.Wrapped (CST.Row Void) →
   String
-formatWrappedRow settings@{ indentation } indent wrapped@(CST.Wrapped { open, value: row, close }) =
+formatWrappedRow settings@{ indentation } indent
+  wrapped@(CST.Wrapped { open, value: row, close }) =
   formatSourceToken settings indent blank open
     <> before
     <> formatRow lines settings indent row
@@ -1840,7 +1912,6 @@ formatWrappedRow settings@{ indentation } indent wrapped@(CST.Wrapped { open, va
     <> formatSourceToken settings indent blank close
   where
   lines = singleOrMultiline wrapped
-
   before /\ after = case row, lines of
     CST.Row { labels: Just _ }, MultipleLines → space /\ (newline <> indent)
     CST.Row { labels: Nothing }, MultipleLines → blank /\ (newline <> indent)

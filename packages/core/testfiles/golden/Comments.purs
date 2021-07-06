@@ -41,6 +41,11 @@ x = X
 y :: Y -> Y -> Y
 y _ _ = Y
 
+commentInRecord =
+  { -- don't destroy the code below
+    x: 12
+  }
+
 -- A trailing comment on the module
 -- Another trailing module comment
 {- A trailing block comment on the module -}

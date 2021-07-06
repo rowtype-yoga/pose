@@ -38,3 +38,18 @@ aDeconstructedFunction blurb@{
   a,
   b
 } = a + b 
+
+aFunctionWithSignature :: Int -> Int
+aFunctionWithSignature = identity
+
+aFunctionWithForallSignature :: forall a. a -> a
+aFunctionWithSignature = identity
+
+aFunctionWithForallButOneLine ::
+  forall a. a -> a
+aFunctionWithForallButOneLine = identity
+
+aFunctionWithForallButTwoLines ::
+  forall a. 
+  a -> a
+aFunctionWithForallButTwoLines = identity
