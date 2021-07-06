@@ -46,6 +46,35 @@ commentInRecord =
     x: 12
   }
 
+commentInRecord2 =
+  { y: 12
+  , -- don't destroy the code below either
+    x: 12
+  }
+
+commentInRecord3 =
+  { y: 12
+  , x: 12 -- don't destroy the code below either
+  , z: 8
+  }
+
+commentInArray =
+  [ -- don't destroy the code below
+    12
+  ]
+
+commentInArray2 =
+  [ 12
+  , -- don't destroy the code below either
+    12
+  ]
+
+commentInArray3 =
+  [ 12
+  , 12 -- don't destroy the code below either
+  , 8
+  ]
+
 -- A trailing comment on the module
 -- Another trailing module comment
 {- A trailing block comment on the module -}

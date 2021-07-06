@@ -1769,8 +1769,15 @@ formatSeparated settings lines indent prefix' formatValue
   go (separator /\ value) =
     prefix
       <> formatSourceToken settings indent blank separator
+      <> ensureNewlineAfterSeparator
       <> prefix'
       <> formatValue value
+    where
+    ensureNewlineAfterSeparator =
+      if hasNonWhitespaceTrailingComment separator then
+        newline <> indent <> prefix'
+      else
+        blank
 
 formatName ∷ ∀ a. Settings → Indent → Prefix → CST.Name a → String
 formatName settings indent prefix (CST.Name { token }) =
@@ -1883,7 +1890,7 @@ formatWrapped ∷
 formatWrapped settings@{ indentation } indent formatValue
   wrapped@(CST.Wrapped { open, value, close }) =
   formatSourceToken settings indent blank open
-    <> ensureNewline
+    <> ensureNewlineAfterOpen
     <> before
     <> formatValue value
     <> after
@@ -1892,7 +1899,7 @@ formatWrapped settings@{ indentation } indent formatValue
   { before, after } = case singleOrMultiline wrapped of
     MultipleLines → { before: space, after: newline <> indent }
     SingleLine → { before: blank, after: blank }
-  ensureNewline =
+  ensureNewlineAfterOpen =
     if hasNonWhitespaceTrailingComment open then
       newline <> indent <> before
     else
