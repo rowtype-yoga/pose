@@ -349,6 +349,7 @@ formatDeclarations settings decls =
 
 formatDeclaration ∷ Settings → Indent → Boolean → CST.Declaration Void → String
 formatDeclaration settings@{ indentation } indent followedByBlankLines declaration = case declaration of
+
   CST.DeclData dataHead maybeConstructors → do
     formatDataHead settings indent dataHead
       <> foldMap formatDataConstructors maybeConstructors
@@ -364,6 +365,7 @@ formatDeclaration settings@{ indentation } indent followedByBlankLines declarati
             blank
             (formatDataConstructor settings indented)
             constructors
+
   CST.DeclType dataHead equals typo →
     formatDataHead settings indent dataHead
       <> newline
@@ -373,6 +375,7 @@ formatDeclaration settings@{ indentation } indent followedByBlankLines declarati
       <> formatType
           settings (indented <> indentation) (singleOrMultiline typo) typo
       <> if followedByBlankLines then newline else blank
+
   CST.DeclNewtype dataHead equals name typo → do
     formatDataHead settings indent dataHead
       <> (newline <> indented)
@@ -386,6 +389,7 @@ formatDeclaration settings@{ indentation } indent followedByBlankLines declarati
     prefix = case singleOrMultilineBetween name typo of
       MultipleLines → newline <> indented
       SingleLine → space
+
   CST.DeclClass classHead members → do
     formatClassHead lines settings indent classHead
       <> foldMap formatMember members
@@ -396,6 +400,7 @@ formatDeclaration settings@{ indentation } indent followedByBlankLines declarati
         <> intercalateMap (newline <> indented) formatLabeledMember labeleds
     formatLabeledMember labeled =
       newline <> indented <> formatLabeledNameType settings indented labeled
+
   CST.DeclInstanceChain instances →
     formatSeparated
       settings
@@ -405,28 +410,35 @@ formatDeclaration settings@{ indentation } indent followedByBlankLines declarati
       (formatInstance settings indent)
       instances
       <> if followedByBlankLines then newline else blank
+
   CST.DeclDerive sourceToken newtype' instanceHead →
     formatSourceToken settings indent blank sourceToken
       <> foldMap (formatSourceToken settings indent space) newtype'
       <> space
       <> formatInstanceHead settings indent instanceHead
       <> if followedByBlankLines then newline else blank
+
   CST.DeclKindSignature kindOfDeclaration labeled →
     formatSourceToken settings blank indent kindOfDeclaration
       <> space
       <> formatLabeledNameType settings indent labeled
+
   CST.DeclSignature labeled → formatLabeledNameType settings indent labeled
+
   CST.DeclValue valueBindingFields →
     formatValueBindingFields settings indent valueBindingFields
       <> if followedByBlankLines then newline else blank
+
   CST.DeclFixity fixityFields →
     formatFixityFields settings indent fixityFields <> newline
+
   CST.DeclForeign foreign'' import'' foreign''' →
     formatSourceToken settings indent blank foreign''
       <> formatSourceToken settings indent space import''
       <> space
       <> formatForeign settings indent foreign'''
       <> if followedByBlankLines then newline else blank
+
   CST.DeclRole type'' role'' name' roles → do
     formatSourceToken settings indentation indent type''
       <> space
@@ -439,7 +451,9 @@ formatDeclaration settings@{ indentation } indent followedByBlankLines declarati
           )
           roles
       <> if followedByBlankLines then newline else blank
+
   CST.DeclError e → absurd e
+
   where
   indented = indent <> indentation
   lines = singleOrMultiline declaration
@@ -881,7 +895,9 @@ formatExpr ∷
   CST.Expr Void →
   String
 formatExpr settings@{ indentation } indent'' expr'' = case expr'' of
+
   CST.ExprAdo adoBlock' → formatAdoBlock lines settings indent'' adoBlock'
+
   CST.ExprApp expr1 expressions →  -- [CHECK] Verify
     formatExpr settings indent'' expr1
       <> foldMap formatApp
@@ -890,6 +906,7 @@ formatExpr settings@{ indentation } indent'' expr'' = case expr'' of
     formatApp (prev /\ curr) = formatExprPrefix appLines settings indent'' curr
       where
       appLines = singleOrMultilineBetween prev curr
+
   CST.ExprArray delimited' → do
     let
       indent' = case lines of
@@ -901,14 +918,23 @@ formatExpr settings@{ indentation } indent'' expr'' = case expr'' of
       indent''
       (formatExpr settings indent')
       delimited'
+
   CST.ExprBoolean boolean _ → formatSourceToken settings indent'' blank boolean
+
   CST.ExprCase caseOf → formatCaseOf lines settings indent'' caseOf
+
   CST.ExprChar char _ → formatSourceToken settings indent'' blank char
+
   CST.ExprConstructor name → formatQualifiedName settings indent'' blank name
+
   CST.ExprDo doBlock → formatDoBlock lines settings indent'' doBlock
+
   CST.ExprHole hole → formatName settings indent'' blank hole
+
   CST.ExprIdent name → formatQualifiedName settings indent'' blank name
+
   CST.ExprIf ifThenElse → formatIfThenElse lines settings indent'' ifThenElse
+
   CST.ExprInfix expr1 expressions →
     formatExpr settings indent'' expr1
       <> prefix
@@ -927,15 +953,20 @@ formatExpr settings@{ indentation } indent'' expr'' = case expr'' of
       formatWrapped settings indent (formatExpr settings indent') wrapped
         <> prefix'
         <> formatExpr settings indent expression
+
   CST.ExprLambda lambda → do
     formatLambda lines settings indent'' lambda
+
   CST.ExprLet letIn → do
     formatLetIn lines settings indent'' letIn
+
   CST.ExprNegate negative expression → do
     formatSourceToken settings indent'' blank negative
       <> formatExpr settings indent'' expression
+
   CST.ExprNumber number _ → do
     formatSourceToken settings indent'' blank number
+
   CST.ExprOp expr1 expressions → do
     let
       indent /\ indent' /\ prefix = case lines of
@@ -962,15 +993,19 @@ formatExpr settings@{ indentation } indent'' expr'' = case expr'' of
                       (newline <> indent'' <> indentation <> indentation)
                     SingleLine → space
                   _ → space
-              formatQualifiedName settings indent' prefix op
+              prefix
+                <> formatQualifiedName settings indent' blank op
                 <> prefix'
                 <> formatExpr settings indent expr
           )
           expressions
+
   CST.ExprOpName name' → do
     formatQualifiedName settings indent'' blank name'
+
   CST.ExprParens wrapped' → do
     formatParens lines settings indent'' (formatExpr settings) wrapped'
+
   CST.ExprRecord delimited → do
     formatRecord
       settings
@@ -981,8 +1016,10 @@ formatExpr settings@{ indentation } indent'' expr'' = case expr'' of
           (formatExpr settings)
       )
       delimited
+
   CST.ExprRecordAccessor recordAccessor' → do
     formatRecordAccessor lines settings indent'' recordAccessor'
+
   CST.ExprRecordUpdate expr' delimitedNonEmpty → do
     let
       indent' /\ prefix = case lines of
@@ -995,8 +1032,11 @@ formatExpr settings@{ indentation } indent'' expr'' = case expr'' of
           indent'
           (formatRecordUpdate settings indent')
           delimitedNonEmpty
+
   CST.ExprSection section → formatSourceToken settings indent'' blank section
+
   CST.ExprString string _ → formatSourceToken settings indent'' blank string
+
   CST.ExprTyped expr' colons type'' → do
     let
       indent' /\ prefix = case lines of
@@ -1006,8 +1046,11 @@ formatExpr settings@{ indentation } indent'' expr'' = case expr'' of
       <> formatSourceToken settings indent'' space colons
       <> prefix
       <> formatType settings indent' lines type''
+
   CST.ExprInt int _ → formatSourceToken settings indent'' blank int
+
   CST.ExprError e → absurd e
+
   where
   lines = singleOrMultiline expr''
 

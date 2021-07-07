@@ -50,6 +50,15 @@ type MyRow ::
   Symbol -> Row Type
 type MyRow s = s
 
+fun :: Int
+fun =
+  identity
+    -- please don't put
+    -- newlines
+    -- in between these
+    $ 0
+
+
 commentInRecord =
   { -- don't destroy the code below
   x: 12
