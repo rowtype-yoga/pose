@@ -41,6 +41,18 @@ x = X
 y :: Y -> Y -> Y
 y _ _ = Y
 
+-- A comment should not make the next line indent so it's invalid
+type MyRow :: Symbol -> Row Type
+type MyRow s
+  = s
+
+-- A comment should not make the next line indent so it's invalid
+type MyRow ::
+  Symbol ->
+  Row Type
+type MyRow s
+  = s
+
 commentInRecord =
   { -- don't destroy the code below
     x: 12

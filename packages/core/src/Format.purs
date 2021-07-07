@@ -412,7 +412,7 @@ formatDeclaration settings@{ indentation } indent followedByBlankLines declarati
       <> formatInstanceHead settings indent instanceHead
       <> if followedByBlankLines then newline else blank
   CST.DeclKindSignature kindOfDeclaration labeled →
-    formatSourceToken settings indentation indent kindOfDeclaration
+    formatSourceToken settings blank indent kindOfDeclaration
       <> space
       <> formatLabeledNameType settings indent labeled
   CST.DeclSignature labeled → formatLabeledNameType settings indent labeled
@@ -1550,6 +1550,7 @@ formatType ∷
   CST.Type Void →
   String
 formatType settings@{ indentation } indent lines t = case t of
+
   CST.TypeApp typo types →
     formatType settings indent (singleOrMultilineBetween typo (NE.head types)) typo
       <> foldMap formatTypeWithPredecessor
@@ -1570,6 +1571,7 @@ formatType settings@{ indentation } indent lines t = case t of
           { indented: indent
           , prefix: space
           }
+
   CST.TypeArrow t1 arrow t2 →
     formatType settings indent (singleOrMultiline t1) t1
       <> space
@@ -1580,14 +1582,23 @@ formatType settings@{ indentation } indent lines t = case t of
     prefix = case lines of
       MultipleLines → newline <> indent
       SingleLine → space
+
   CST.TypeArrowName arrowName → formatSourceToken settings indent blank arrowName
+
   CST.TypeVar name → formatName settings indent blank name
+
   CST.TypeConstructor qualifiedName → formatQualifiedName settings indent blank qualifiedName
+
   CST.TypeWildcard wildcard → formatSourceToken settings indent blank wildcard
+
   CST.TypeHole name → formatName settings indent blank name
+
   CST.TypeString typeString _ → formatSourceToken settings indent blank typeString
+
   CST.TypeRow wrappedRow → formatWrappedRow settings indent wrappedRow
+
   CST.TypeRecord wrappedRow → formatWrappedRow settings indent wrappedRow
+
   CST.TypeForall forAll typeVarBindings dot tailType →
     formatSourceToken settings indent blank forAll
       <> formatTypeVarBindings settings indent (NE.toArray typeVarBindings)
@@ -1598,6 +1609,7 @@ formatType settings@{ indentation } indent lines t = case t of
     prefix = case singleOrMultilineBetween t tailType of
       MultipleLines → newline <> indent
       SingleLine → space
+
   CST.TypeKinded typo colons kind →
     formatType settings indent lines typo
       <> space
@@ -1605,10 +1617,13 @@ formatType settings@{ indentation } indent lines t = case t of
       <> prefix
       <> formatType settings indented lines kind
     where
-    { indented, prefix } = case lines of
-      MultipleLines →
-        { indented: indent <> indentation, prefix: newline <> indent }
-      SingleLine → { indented: indent, prefix: space }
+    indented = case lines of
+      MultipleLines → indent <> indentation
+      SingleLine → indent
+    prefix = case lines of
+      MultipleLines → newline <> indent
+      SingleLine → space
+
   CST.TypeOp typo types →
     formatType settings indent (singleOrMultiline typo) typo
       <> foldMap formatOp types
@@ -1623,7 +1638,9 @@ formatType settings@{ indentation } indent lines t = case t of
         MultipleLines →
           { indented: indent <> indentation, prefix: newline <> indent }
         SingleLine → { indented: indent, prefix: space }
+
   CST.TypeOpName op → formatQualifiedName settings indent blank op
+
   CST.TypeConstrained constraint arrow typo →
     formatType settings indent lines constraint
       <> space
@@ -1634,12 +1651,14 @@ formatType settings@{ indentation } indent lines t = case t of
     prefix = case lines of
       MultipleLines → newline <> indent
       SingleLine → space
+
   CST.TypeParens wrapped →
     formatParens lines settings indent
       ( \x wrappedType →
           formatType settings x (singleOrMultiline wrappedType) wrappedType
       )
       wrapped
+
   CST.TypeUnaryRow sourceToken typo →
     formatSourceToken settings indent blank sourceToken
       <> prefix
@@ -1648,6 +1667,7 @@ formatType settings@{ indentation } indent lines t = case t of
     prefix = case lines of
       MultipleLines → newline <> indent
       SingleLine → space
+
   CST.TypeError e → absurd e
 
 formatLabeled ∷
