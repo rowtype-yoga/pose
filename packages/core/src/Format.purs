@@ -1297,36 +1297,45 @@ formatCaseOf ∷
   Indent →
   CST.CaseOf Void →
   String
-formatCaseOf lines settings@{ indentation } indent' caseOf' = case caseOf' of
-  { keyword: case', head, of: of', branches } → do
-    let
-      indent /\ prefix = case lines of
-        MultipleLines → (indent' <> indentation) /\ (newline <> indent' <> indentation)
-        SingleLine → indent' /\ space
-    formatSourceToken settings indent' blank case'
-      <> space
-      <> formatSeparated
-          settings
-          (singleOrMultiline head)
-          indent
-          space
-          (formatExpr settings indent)
-          head
-      <> space
-      <> formatSourceToken settings indent' blank of'
-      <> foldMap
-          ( \(binders /\ guarded) →
-              prefix
-                <> formatSeparated
-                    settings
-                    (singleOrMultiline binders)
-                    indent
-                    space
-                    (formatBinder settings indent)
-                    binders
-                <> formatGuarded settings indent guarded
-          )
-          branches
+formatCaseOf lines settings@{ indentation } indent' { keyword: case', head, of: of', branches } = do
+  let
+    indent = case lines of
+      MultipleLines → indent' <> indentation
+      SingleLine → indent'
+    branchPrefix = case lines of
+      MultipleLines → newline <> indent' <> indentation
+      SingleLine → space
+  formatSourceToken settings indent' blank case'
+    <> space
+    <> formatSeparated
+        settings
+        (singleOrMultiline head)
+        indent
+        space
+        (formatExpr settings indent)
+        head
+    <> space
+    <> formatSourceToken settings indent' blank of'
+    <> foldMap
+        ( \(binders /\ guarded) → do
+            let
+              preservedNewline =
+                if isPrecededByBlankLines binders then
+                  newline
+                else
+                  blank
+            preservedNewline
+              <> branchPrefix
+              <> formatSeparated
+                  settings
+                  (singleOrMultiline binders)
+                  indent
+                  space
+                  (formatBinder settings indent)
+                  binders
+              <> formatGuarded settings indent guarded
+        )
+        branches
 
 formatArray ∷
   ∀ a.
@@ -1468,11 +1477,7 @@ formatOneOrDelimited ∷
   ∀ a.
   RangeOf a ⇒
   Settings →
-  Lines →
-  Indent →
-  (a → String) →
-  CST.OneOrDelimited a →
-  String
+  Lines → Indent → (a → String) → CST.OneOrDelimited a → String
 formatOneOrDelimited settings lines indent formatValue oneOrDelimited = case oneOrDelimited of
   CST.One a → formatValue a
   CST.Many delimitedNonEmpty → formatDelimitedNonEmpty settings lines indent formatValue delimitedNonEmpty
@@ -1546,7 +1551,7 @@ formatType ∷
   String
 formatType settings@{ indentation } indent lines t = case t of
   CST.TypeApp typo types →
-    formatType settings indent (singleOrMultiline typo) typo
+    formatType settings indent (singleOrMultilineBetween typo (NE.head types)) typo
       <> foldMap formatTypeWithPredecessor
           (Array.zip typesArray (typo Array.: typesArray))
     where
@@ -1557,8 +1562,14 @@ formatType settings@{ indentation } indent lines t = case t of
         <> formatType settings indented (singleOrMultiline curr) curr
       where
       { indented, prefix } = case singleOrMultilineBetween curr pred of
-        MultipleLines → { indented: indent <> indentation, prefix: newline <> indent <> indentation }
-        SingleLine → { indented: indent, prefix: space }
+        MultipleLines →
+          { indented: indent <> indentation
+          , prefix: newline <> indent <> indentation
+          }
+        SingleLine →
+          { indented: indent
+          , prefix: space
+          }
   CST.TypeArrow t1 arrow t2 →
     formatType settings indent (singleOrMultiline t1) t1
       <> space
@@ -1582,9 +1593,9 @@ formatType settings@{ indentation } indent lines t = case t of
       <> formatTypeVarBindings settings indent (NE.toArray typeVarBindings)
       <> formatSourceToken settings indent blank dot
       <> prefix
-      <> formatType settings indent lines tailType
+      <> formatType settings indent (singleOrMultilineBetween t tailType) tailType
     where
-    prefix = case lines of
+    prefix = case singleOrMultilineBetween t tailType of
       MultipleLines → newline <> indent
       SingleLine → space
   CST.TypeKinded typo colons kind →

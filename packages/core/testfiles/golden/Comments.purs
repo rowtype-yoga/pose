@@ -58,6 +58,17 @@ commentInRecord3 =
   , z: 8
   }
 
+commentInRecord4 =
+  { y: 12
+  , x: 12 -- don't destroy the closing curly
+  }
+
+commentInRecord5 =
+  { y: 12
+  , x: 12
+  -- don't destroy the closing curly
+  }
+
 commentInArray =
   [ -- don't destroy the code below
     12
