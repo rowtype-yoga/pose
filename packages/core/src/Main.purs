@@ -15,24 +15,16 @@ import Format (format)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile)
 import Node.Path (FilePath)
+import OS (stdinAsString)
 import PureScript.CST (RecoveredParserResult(..), parseModule)
 import PureScript.CST.Errors (printParseError)
 import Settings (Settings, defaultSettings)
 
-foreign import argv :: Array String
-
-foreign import stdinFile :: FilePath
-
 main :: Effect Unit
-main =
-  launchAff_ do
-    stdinContent <- readTextFile UTF8 stdinFile
-    if stdinContent /= "" then
-      parseAndFormatOrThrow defaultSettings stdinContent
-    else case Array.drop 2 argv of
-      [ fileName ] -> do
-        readTextFile UTF8 fileName >>= parseAndFormatOrThrow defaultSettings
-      _ -> Log.error "Please only supply one argument"
+main = do
+  input <- stdinAsString
+  launchAff_ $ parseAndFormatOrThrow defaultSettings input
+
 
 parseAndFormatOrThrow :: Settings -> String -> Aff Unit
 parseAndFormatOrThrow settings =

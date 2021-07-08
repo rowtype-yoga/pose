@@ -1,23 +1,16 @@
 module Format (format) where
 
 import Prelude
-import Data.Array (any, foldl, intercalate, intersperse)
+
 import Data.Array as Array
 import Data.Array.NonEmpty as NE
 import Data.Array.NonEmpty.Internal (NonEmptyArray)
-import Data.Bitraversable (bisequence)
-import Data.Foldable (fold, foldMap, sum)
+import Data.Foldable (any, fold, foldMap, sum)
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Monoid.Additive (Additive(..))
-import Data.Newtype (ala)
 import Data.Semigroup.Foldable (intercalateMap)
-import Data.String (Pattern(..), split)
-import Data.String.CodeUnits (lastIndexOf)
-import Data.String.CodeUnits as String
 import Data.Tuple (fst, snd)
 import Data.Tuple.Nested (type (/\), (/\))
-import Foreign.Internal.Stringify (unsafeStringify)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.CST.Print as Print
 import PureScript.CST.Range (class RangeOf, class TokensOf, rangeOf, tokensOf)
