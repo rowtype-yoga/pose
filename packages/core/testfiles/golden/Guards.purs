@@ -17,3 +17,7 @@ altAppend as bs
         Just as' -> as' `altAppend` bs'
         Nothing -> bs'
   | otherwise = as <> bs
+
+bla = case _ of
+  x | x > 3 -> x
+  _ -> 4

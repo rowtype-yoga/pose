@@ -5,7 +5,8 @@ import Data.Array (any, foldl, intercalate, intersperse)
 import Data.Array as Array
 import Data.Array.NonEmpty as NE
 import Data.Array.NonEmpty.Internal (NonEmptyArray)
-import Data.Foldable (fold, foldMap)
+import Data.Bitraversable (bisequence)
+import Data.Foldable (fold, foldMap, sum)
 import Data.FoldableWithIndex (foldMapWithIndex)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Monoid.Additive (Additive(..))
@@ -16,6 +17,7 @@ import Data.String.CodeUnits (lastIndexOf)
 import Data.String.CodeUnits as String
 import Data.Tuple (fst, snd)
 import Data.Tuple.Nested (type (/\), (/\))
+import Foreign.Internal.Stringify (unsafeStringify)
 import Partial.Unsafe (unsafeCrashWith)
 import PureScript.CST.Print as Print
 import PureScript.CST.Range (class RangeOf, class TokensOf, rangeOf, tokensOf)
@@ -31,7 +33,7 @@ precedingEmptyLines ∷ Array (CST.Comment CST.LineFeed) → Int
 precedingEmptyLines =
   Array.takeWhile commentIsSpaceOrLineFeed
     >>> map toLines
-    >>> ala Additive foldMap
+    >>> sum
   where
   toLines = case _ of
     CST.Line _ n → n
@@ -46,10 +48,19 @@ unsafeFirstTokenOf x = case TokensOf.head (tokensOf x) of
   Just sourceToken → sourceToken
   Nothing → unsafeCrashWith "Unexpectedly got no tokens"
 
+unsafeLastTokenOf ∷ ∀ a. TokensOf a ⇒ a → CST.SourceToken
+unsafeLastTokenOf x = case Array.last (TokensOf.toArray (tokensOf x)) of
+  Just sourceToken → sourceToken
+  Nothing → unsafeCrashWith "Unexpectedly got no tokens"
+
 isPrecededByNewline ∷ ∀ t. TokensOf t ⇒ t → Boolean
 isPrecededByNewline x = case TokensOf.head (tokensOf x) of
-  Just { leadingComments } → precedingEmptyLines leadingComments > 0
+  Just sourceToken → sourceTokenIsPrecededByNewline sourceToken
   Nothing → unsafeCrashWith "Unexpectedly got no tokens"
+
+sourceTokenIsPrecededByNewline ∷ CST.SourceToken → Boolean
+sourceTokenIsPrecededByNewline { leadingComments } =
+  precedingEmptyLines leadingComments > 0
 
 hasNonWhitespaceTrailingComment ∷ CST.SourceToken → Boolean
 hasNonWhitespaceTrailingComment =
@@ -84,6 +95,10 @@ singleOrMultilineBetween ∷ ∀ a b. RangeOf a ⇒ RangeOf b ⇒ a → b → Li
 singleOrMultilineBetween a b = do
   let { start } = rangeOf a
   let { end } = rangeOf b
+  singleOrMultilineFromRange { start, end }
+
+singleOrMultilineBetweenSourceRanges ∷ CST.SourceRange → CST.SourceRange → Lines
+singleOrMultilineBetweenSourceRanges { start } { end } =
   singleOrMultilineFromRange { start, end }
 
 rangeOfInstanceHead ∷ CST.InstanceHead Void → Lines
@@ -632,8 +647,9 @@ formatValueBindingFields
   settings@{ indentation } indent { name, binders, guarded } =
   formatName settings indent blank name
     <> foldMap formatValueBinder binders
-    <> formatGuarded settings indent guarded
+    <> formatGuarded settings lines indent guarded
   where
+  lines = singleOrMultilineBetweenSourceRanges (Array.last binders <#> rangeOf # fromMaybe (rangeOf name)) (rangeOf guarded)
   formatValueBinder binder =
     valueBinderSeparator <> formatBinder settings indent binder
     where
@@ -734,22 +750,25 @@ formatBinder settings@{ indentation } indent' binder = case binder of
       <> formatSourceToken settings indent' blank int
 
   CST.BinderError x → absurd x
-
   where
   lines = singleOrMultiline binder
 
 formatGuarded ∷
   Settings →
+  Lines →
   Indent →
   CST.Guarded Void →
   String
-formatGuarded settings@{ indentation } indent' = case _ of
+formatGuarded settings@{ indentation } lines indent' = case _ of
   CST.Guarded guardedExprs → do
     let indent = indent' <> indentation
     foldMap
-      ( \guardedExpr →
-          (newline <> indent)
-            <> formatGuardedExpr settings indent guardedExpr
+      ( \guardedExpr → do
+          let
+            prefix = case lines of
+              MultipleLines → newline <> indent
+              SingleLine → space
+          prefix <> formatGuardedExpr settings indent guardedExpr
       )
       guardedExprs
   CST.Unconditional separator whereToken → do
@@ -1025,8 +1044,7 @@ formatExpr settings@{ indentation } indent'' expr'' = case expr'' of
                       (newline <> indent'' <> indentation <> indentation)
                     SingleLine → space
 
-                  _ →
-                    space
+                  _ → space
 
                 operatorSuffix = do
                   if hasNonWhitespaceTrailingComment (unsafeFirstTokenOf operator) then
@@ -1147,7 +1165,6 @@ formatRecordAccessor lines settings@{ indentation } indent' recordAccessor' = ca
   { expr: expr', dot, path } → do
     let
       indentTrick = indent' <> indentation
-
       indent /\ prefix = case lines of
         MultipleLines → indentTrick /\ (newline <> indentTrick)
         SingleLine → indent' /\ blank
@@ -1172,7 +1189,6 @@ formatRecordUpdate settings@{ indentation } indent' recordUpdate' = case recordU
     let
       lines = singleOrMultiline delimitedNonEmpty'
       indentTrick = indent' <> indentation
-
       indent /\ prefix = case lines of
         MultipleLines → indentTrick /\ (newline <> indentTrick)
         SingleLine → indent' /\ space
@@ -1382,13 +1398,6 @@ formatCaseOf ∷
   CST.CaseOf Void →
   String
 formatCaseOf lines settings@{ indentation } indent' { keyword: case', head, of: of', branches } = do
-  let
-    indent = case lines of
-      MultipleLines → indent' <> indentation
-      SingleLine → indent'
-    branchPrefix = case lines of
-      MultipleLines → newline <> indent' <> indentation
-      SingleLine → space
   formatSourceToken settings indent' blank case'
     <> space
     <> formatSeparated
@@ -1400,26 +1409,35 @@ formatCaseOf lines settings@{ indentation } indent' { keyword: case', head, of: 
         head
     <> space
     <> formatSourceToken settings indent' blank of'
-    <> foldMap
-        ( \(binders /\ guarded) → do
-            let
-              preservedNewline =
-                if isPrecededByBlankLines binders then
-                  newline
-                else
-                  blank
-            preservedNewline
-              <> branchPrefix
-              <> formatSeparated
-                  settings
-                  (singleOrMultiline binders)
-                  indent
-                  space
-                  (formatBinder settings indent)
-                  binders
-              <> formatGuarded settings indent guarded
-        )
-        branches
+    <> foldMap formatBranch branches
+  where
+  indent = case lines of
+    MultipleLines → indent' <> indentation
+    SingleLine → indent'
+
+  branchPrefix = case lines of
+    MultipleLines → newline <> indent' <> indentation
+    SingleLine → space
+
+  formatBranch ∷ (CST.Separated (CST.Binder Void)) /\ (CST.Guarded Void) → String
+  formatBranch (binders /\ guarded) = do
+    let
+      preservedNewlineBeforeBranch =
+        if isPrecededByBlankLines binders then
+          newline
+        else
+          blank
+    preservedNewlineBeforeBranch
+      <> branchPrefix
+      <> formatSeparated
+          settings
+          (singleOrMultiline binders)
+          indent
+          space
+          (formatBinder settings indent)
+          binders
+      <> formatGuarded
+          settings (singleOrMultilineBetween binders guarded) indent guarded
 
 formatArray ∷
   ∀ a.
