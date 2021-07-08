@@ -1,7 +1,7 @@
 module Format (format) where
 
 import Prelude
-import Data.Array (any, foldl)
+import Data.Array (any, foldl, intercalate, intersperse)
 import Data.Array as Array
 import Data.Array.NonEmpty as NE
 import Data.Array.NonEmpty.Internal (NonEmptyArray)
@@ -11,6 +11,7 @@ import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Monoid.Additive (Additive(..))
 import Data.Newtype (ala)
 import Data.Semigroup.Foldable (intercalateMap)
+import Data.String (Pattern(..), split)
 import Data.String.CodeUnits (lastIndexOf)
 import Data.String.CodeUnits as String
 import Data.Tuple (fst, snd)
@@ -40,6 +41,7 @@ isPrecededByBlankLines ∷ ∀ t. TokensOf t ⇒ t → Boolean
 isPrecededByBlankLines x =
   precedingEmptyLines (unsafeFirstTokenOf x).leadingComments > 1
 
+unsafeFirstTokenOf ∷ ∀ a. TokensOf a ⇒ a → CST.SourceToken
 unsafeFirstTokenOf x = case TokensOf.head (tokensOf x) of
   Just sourceToken → sourceToken
   Nothing → unsafeCrashWith "Unexpectedly got no tokens"
@@ -52,6 +54,14 @@ isPrecededByNewline x = case TokensOf.head (tokensOf x) of
 hasNonWhitespaceTrailingComment ∷ CST.SourceToken → Boolean
 hasNonWhitespaceTrailingComment =
   _.trailingComments
+    >>> any case _ of
+        CST.Comment "" → false -- Don't think this should happen
+        CST.Comment _ → true
+        _ → false
+
+hasNonWhitespaceLeadingComment ∷ CST.SourceToken → Boolean
+hasNonWhitespaceLeadingComment =
+  _.leadingComments
     >>> any case _ of
         CST.Comment "" → false -- Don't think this should happen
         CST.Comment _ → true
@@ -423,7 +433,8 @@ formatDeclaration settings@{ indentation } indent followedByBlankLines declarati
       <> space
       <> formatLabeledNameType settings indent labeled
 
-  CST.DeclSignature labeled → formatLabeledNameType settings indent labeled
+  CST.DeclSignature labeled →
+    formatLabeledNameType settings indent labeled
 
   CST.DeclValue valueBindingFields →
     formatValueBindingFields settings indent valueBindingFields
@@ -637,6 +648,7 @@ formatBinder ∷
   CST.Binder Void →
   String
 formatBinder settings@{ indentation } indent' binder = case binder of
+
   CST.BinderArray delimited →
     formatArray
       settings
@@ -644,10 +656,13 @@ formatBinder settings@{ indentation } indent' binder = case binder of
       indent'
       (formatBinder settings indent')
       delimited
+
   CST.BinderBoolean boolean _ →
     formatSourceToken settings indent' blank boolean
+
   CST.BinderChar char _ →
     formatSourceToken settings indent' blank char
+
   CST.BinderConstructor name' binders → do
     let
       prefix = case singleOrMultiline binder of
@@ -657,14 +672,17 @@ formatBinder settings@{ indentation } indent' binder = case binder of
       <> foldMap
           (\binder' → prefix <> formatBinder settings indent' binder')
           binders
+
   -- with @ sign
   CST.BinderNamed name' at binder' →
     formatName settings indent' blank name'
       <> formatSourceToken settings indent' blank at
       <> formatBinder settings indent' binder'
+
   CST.BinderNumber negative number _ →
     foldMap (formatSourceToken settings indent' blank) negative
       <> formatSourceToken settings indent' blank number
+
   CST.BinderOp binder1 binders →
     formatBinder (settings { indentation = indent' }) prefix binder1
       <> foldMap formatNamedBinder binders
@@ -677,8 +695,10 @@ formatBinder settings@{ indentation } indent' binder = case binder of
       formatQualifiedName settings indent' prefix name
         <> prefix
         <> formatBinder settings indent binder
+
   CST.BinderParens wrapped → do
     formatParens lines settings indent' (formatBinder settings) wrapped
+
   CST.BinderRecord delimited → do
     formatRecord
       settings
@@ -689,8 +709,10 @@ formatBinder settings@{ indentation } indent' binder = case binder of
           (formatBinder settings)
       )
       delimited
+
   CST.BinderString string _ → do
     formatSourceToken settings indent' blank string
+
   CST.BinderTyped binder' colons type'' → do
     let
       indentTrick = indent' <> indentation
@@ -701,13 +723,18 @@ formatBinder settings@{ indentation } indent' binder = case binder of
       <> formatSourceToken settings indent' space colons
       <> prefix
       <> formatType settings indent lines type''
+
   CST.BinderVar name → formatName settings indent' blank name
+
   CST.BinderWildcard wildcard →
     formatSourceToken settings indent' blank wildcard
+
   CST.BinderInt negative int _ →
     foldMap (formatSourceToken settings indent' blank) negative
       <> formatSourceToken settings indent' blank int
+
   CST.BinderError x → absurd x
+
   where
   lines = singleOrMultiline binder
 
@@ -729,7 +756,7 @@ formatGuarded settings@{ indentation } indent' = case _ of
     formatSourceToken settings indent' space separator
       <> formatWhere settings indent' whereToken
 
--- | This is also regular expressions that *can* have a where
+-- | This is also code blocks that *can* have a where
 formatWhere ∷
   Settings →
   Indent →
@@ -969,33 +996,47 @@ formatExpr settings@{ indentation } indent'' expr'' = case expr'' of
 
   CST.ExprOp expr1 expressions → do
     let
-      indent /\ indent' /\ prefix = case lines of
-        MultipleLines → (indent'' <> indentation <> indentation) /\ (indent'' <> indentation) /\ (newline <> indent'' <> indentation)
-        SingleLine → (indent'' <> indentation) /\ indent'' /\ space
+      indent /\ indent' = case lines of
+        MultipleLines → (indent'' <> indentation <> indentation) /\ (indent'' <> indentation)
+        SingleLine → (indent'' <> indentation) /\ indent''
+      operatorPrefix = case lines of
+        MultipleLines → (newline <> indent'' <> indentation)
+        SingleLine → space
     formatExpr settings indent'' expr1
       <> foldMap
-          ( \(op /\ expr) → do
+          ( \(operator /\ expr) → do
               let
                 -- To preserve alignment of brackets, commas, etc.
                 -- we need to add a newline if there's a multiline record, 
                 -- array, etc.
-                prefix' = case expr of
+                expressionPrefix = case expr of
                   CST.ExprRecord _ → case singleOrMultiline expr of
                     MultipleLines →
                       (newline <> indent'' <> indentation <> indentation)
                     SingleLine → space
+
                   CST.ExprRecordUpdate _ _ → case singleOrMultiline expr of
                     MultipleLines →
                       (newline <> indent'' <> indentation <> indentation)
                     SingleLine → space
+
                   CST.ExprArray _ → case singleOrMultiline expr of
                     MultipleLines →
                       (newline <> indent'' <> indentation <> indentation)
                     SingleLine → space
-                  _ → space
-              prefix
-                <> formatQualifiedName settings indent' blank op
-                <> prefix'
+
+                  _ →
+                    space
+
+                operatorSuffix = do
+                  if hasNonWhitespaceTrailingComment (unsafeFirstTokenOf operator) then
+                    newline <> indent' <> space
+                  else
+                    blank
+              operatorPrefix
+                <> formatQualifiedName settings indent' blank operator
+                <> operatorSuffix
+                <> expressionPrefix
                 <> formatExpr settings indent expr
           )
           expressions
@@ -1906,8 +1947,7 @@ formatCommentLeading ∷
   CST.Comment CST.LineFeed →
   String
 formatCommentLeading indent prefix = case _ of
-  CST.Comment comment → do
-    prefix <> comment <> newline <> indent
+  CST.Comment comment → prefix <> comment <> newline <> indent
   CST.Line _ _ → blank
   CST.Space _ → blank
 
@@ -1942,17 +1982,17 @@ formatCommentsTrailingModule ∷
   String
 formatCommentsTrailingModule commentsTrailing' = do
   let
-    comments = map formatComment commentsTrailing'
-  case NE.fromArray (Array.catMaybes comments) of
+    formattedComments = map formatComment commentsTrailing'
+  case NE.fromArray (Array.catMaybes formattedComments) of
     Nothing → blank
     Just comments →
       newline <> fold (NE.intersperse newline comments) <> newline
-
-formatComment ∷ ∀ lf. CST.Comment lf → Maybe String
-formatComment = case _ of
-  CST.Comment comment → Just comment
-  CST.Space _ → Nothing
-  CST.Line _ _ → Nothing
+  where
+  formatComment ∷ ∀ lf. CST.Comment lf → Maybe String
+  formatComment = case _ of
+    CST.Comment comment → Just comment
+    CST.Space _ → Nothing
+    CST.Line _ _ → Nothing
 
 formatWrapped ∷
   ∀ a.

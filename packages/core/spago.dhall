@@ -22,6 +22,7 @@ to generate this file without the comments in this block.
   , "exceptions"
   , "foldable-traversable"
   , "foreign"
+  , "foreign-generic"
   , "functions"
   , "language-cst-parser"
   , "maybe"

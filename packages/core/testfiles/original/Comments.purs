@@ -58,6 +58,19 @@ fun =
     -- in between these
     $ 0
 
+commentGluing :: Int
+commentGluing =
+  identity
+    $ -- leave these comments
+      -- on separate lines
+      0
+
+commentGluingWorse :: Int
+commentGluingWorse =
+  identity
+    $ -- don't turn the next line into a comment
+      0
+
 
 commentInRecord =
   { -- don't destroy the code below
