@@ -30,8 +30,9 @@ import Plumage.Atom.Button (mkButton, primaryButtonStyle)
 import Plumage.Layer (zIndex)
 import Plumage.Layer as Layer
 import Plumage.Style (mB, mR, mT, mX', mXAuto, mY, pB, pL, pR, pT, pX, pXY, pY)
-import Plumage.Style.Border (border, borderCol, borderSolid, rounded, roundedXl, rounded2xl)
+import Plumage.Style.Border (border, borderCol, borderSolid, rounded, rounded2xl, roundedDefault, roundedSm, roundedXl)
 import Plumage.Style.BoxShadow (shadowDefault, shadowLg, shadowSm, shadowXxl)
+import Plumage.Style.Breakpoint (screenSm)
 import Plumage.Style.Color.Background (background, linearGradient)
 import Plumage.Style.Color.Tailwind (amber, gray, lime, pink, purple, rose, teal, violet)
 import Plumage.Style.Color.Text (textCenter, textCol)
@@ -41,7 +42,7 @@ import Plumage.Style.Display.Flex (flexCol, flexRow, gap, itemsCenter, justifyBe
 import Plumage.Style.Divide (divideX)
 import Plumage.Style.Opacity (opacity)
 import Plumage.Style.Size (full, height, height', maxWidth, screenWidth, width, width', widthFull, widthScreen)
-import Plumage.Style.Text (fontBlack, fontBold, fontLight, fontMedium, fontNormal, fontSemibold, text3xl, text4xl, text6xl, text7xl, textBase, textLg, textSm, textXl, textXs, trackingNormal, trackingTight, trackingTighter, trackingWide, trackingWider, trackingWidest)
+import Plumage.Style.Text (fontBlack, fontBold, fontLight, fontMedium, fontNormal, fontSemibold, text2xl, text3xl, text4xl, text6xl, text7xl, textBase, textLg, textSm, textXl, textXs, trackingNormal, trackingTight, trackingTighter, trackingWide, trackingWider, trackingWidest)
 import Plumage.Util.HTML as H
 import Pose.Format (format)
 import PureScript.CST (RecoveredParserResult(..), parseModule)
@@ -445,9 +446,10 @@ mkLanding = do
                   /> poseAnimation
               , R.h2' </* { css: (text3xl <> fontNormal <> trackingWide <> E.css { color: E.str colour.textPaler2 }) } /> [ R.text "A formatter for PureScript" ]
               ]
+          , R.noscript_ [ R.text "Turn on JavaScript to try out POSE live in your browser now" ]
           , theEditor
           , R.div'
-              </* { css: pL 24 <> maxWidth 900 <> mXAuto <> mT 700 }
+              </* { css: pX 8 <> screenSm (pX 24) <> maxWidth 900 <> mXAuto <> mT 700 }
               />
                 [ mainHeading "User Manual"
                 , stepHeading "Installation"
@@ -491,13 +493,19 @@ githubLink =
 
 monospan :: String -> JSX
 monospan text =
-  R.code' </* { css: E.css { fontFamily: E.str "'Jetbrains Mono', monospace" } } /> [ R.text text ]
+  R.code'
+    </*
+      { css:
+          E.css
+            { fontFamily: E.str "Times'Jetbrains Mono', ui-monospace, monospace" }
+      }
+    /> [ R.text text ]
 
 stepHeading :: String -> JSX
 stepHeading text =
   R.h3'
     </*
-      { css: (text4xl <> fontSemibold <> trackingNormal <> E.css { color: E.str colour.textPaler3 } <> pY 12)
+      { css: (text2xl <> screenSm text4xl <> fontSemibold <> trackingNormal <> E.css { color: E.str colour.textPaler3 } <> pY 12)
       }
     /> [ R.text text ]
 
@@ -505,7 +513,7 @@ mainHeading :: String -> JSX
 mainHeading text =
   R.h2'
     </*
-      { css: (text6xl <> fontSemibold <> textCenter <> trackingTight <> E.css { color: E.str colour.textPaler3 } <> pY 36 <> mT 16)
+      { css: (text4xl <> screenSm text6xl <> fontSemibold <> textCenter <> trackingTight <> E.css { color: E.str colour.textPaler3, hyphens: E.auto, wordWrap: E.str "break-word" } <> pY 36 <> mT 16)
       }
     /> [ R.text text ]
 
@@ -516,16 +524,23 @@ codeSnippet text =
       { css:
           background (gray._900 # withAlpha 0.9)
             <> textCol gray._400
-            <> rounded2xl
+            <> roundedDefault
+            <> screenSm (rounded2xl)
             <> shadowLg
             <> mXAuto
             <> maxWidth 600
             <> mY 40
+            <> textXs
+            <> screenSm textSm
       }
     />
       [ R.pre'
           </*
-            { css: pX 40 <> pY 20
+            { css:
+                pX 8
+                  <> pY 10
+                  <> screenSm (pX 24 <> pY 20)
+                  <> E.css { overflow: E.auto }
             }
           />
             [ R.code'

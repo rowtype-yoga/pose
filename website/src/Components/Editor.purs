@@ -136,7 +136,7 @@ mkEditor editorComponent = do
           , onChange: mkEffectFn2 onChange
           , options:
               unsafeToForeign
-                { fontFamily: "Jetbrains Mono"
+                { fontFamily: "'Jetbrains Mono', ui-monospace, monospace"
                 , fontLigatures: true
                 , fontSize: "15px"
                 , lineNumbers: "off"
