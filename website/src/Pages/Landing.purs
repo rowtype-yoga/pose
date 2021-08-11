@@ -454,7 +454,7 @@ mkLanding = do
                 [ mainHeading "User Manual"
                 , stepHeading "Installation"
                 , R.p_ [ R.text "We hook into prettier to take care of a lot of the heavy lifting for us so let's install it and the plugin:" ]
-                , codeSnippet "npm install --save-dev prettier \\ \n  @rowtype-yoga/prettier-plugin-purescript"
+                , codeSnippet "npm install --save-dev prettier \\\n  @rowtype-yoga/prettier-plugin-purescript"
                 , R.p_ [ R.text "We only want to format our own code so we modify ", monospan ".prettierignore", R.text ":" ]
                 , codeSnippet """echo -e ".spago\noutput/" >> .prettierignore"""
                 , stepHeading "Formatting"
