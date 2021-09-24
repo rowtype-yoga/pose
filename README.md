@@ -46,7 +46,7 @@ spago -x exe.dhall test
 Then you should adjust the corresponding file in: `packages/core/testfiles/golden/` to what you expect the output to be and start making changes in `packages/core/src/Format.purs` until all tests pass.
 
 Run the tests often to get nice diffs:
-![image of a diff](../../blob/master/images/diff.png)
+![image of a diff](../../blob/main/images/diff.png)
 
 ```
 51 passing
