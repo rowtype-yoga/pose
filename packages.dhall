@@ -188,8 +188,7 @@ in  upstream
       , "tuples"
       , "typelevel-prelude"
       ]
-    , repo =
-        "https://github.com/natefaubion/purescript-language-cst-parser.git"
+    , repo = "https://github.com/natefaubion/purescript-language-cst-parser.git"
     , version = "main"
     }
   with plumage =
