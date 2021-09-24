@@ -189,8 +189,8 @@ in  upstream
       , "typelevel-prelude"
       ]
     , repo =
-        "https://github.com/i-am-the-slime/purescript-language-cst-parser.git"
-    , version = "range-fix"
+        "https://github.com/natefaubion/purescript-language-cst-parser.git"
+    , version = "main"
     }
   with plumage =
     { dependencies =

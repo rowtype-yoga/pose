@@ -1189,7 +1189,7 @@ formatInstanceHead ∷
   String
 formatInstanceHead settings@{ tabSize } indent head =
   formatSourceToken settings indent blank head.keyword
-    <> foldMap formatNameAndSeparator head.nameAndSeparator
+    <> foldMap formatNameAndSeparator head.name
     <> foldMap formatInstanceConstraint head.constraints
     <> formatQualifiedName settings indented prefix head.className
     <> foldMap formatInstanceType head.types
@@ -1212,9 +1212,9 @@ formatInstanceHead settings@{ tabSize } indent head =
       SingleLine → space
     Nothing → space
 
-  formatNameAndSeparator { name: name, separator: colons } =
+  formatNameAndSeparator (name /\ separator) =
     formatName settings indent space name
-      <> formatSourceToken settings indent space colons
+      <> formatSourceToken settings indent space separator
 
   formatInstanceConstraint (constraints /\ arrow) =
     prefix
